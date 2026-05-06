@@ -26,6 +26,7 @@
     "accuracy:browser": "pnpm --dir ../.. --filter @qa-sdk/rlsc-analysis build && pnpm --dir ../.. --filter @qa-sdk/rlsc-perspective build && pnpm --dir ../.. --filter @qa-sdk/e2e exec node ../../packages/rlsc-analysis/smoke/accuracy.mjs",
     "build": "tsup",
     "dev": "tsup --watch",
+    "prepare": "pnpm build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
