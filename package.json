@@ -1,5 +1,5 @@
 {
-  "name": "@qa-sdk/rlsc-analysis",
+  "name": "rlsc-analysis",
   "version": "0.1.0",
   "description": "RLSC screen document and layout analysis package",
   "files": [
@@ -23,7 +23,7 @@
     }
   },
   "scripts": {
-    "accuracy:browser": "pnpm --dir ../.. --filter @qa-sdk/rlsc-analysis build && pnpm --dir ../.. --filter @qa-sdk/rlsc-perspective build && pnpm --dir ../.. --filter @qa-sdk/e2e exec node ../../packages/rlsc-analysis/smoke/accuracy.mjs",
+    "accuracy:browser": "pnpm --dir ../.. --filter rlsc-analysis build && pnpm --dir ../.. --filter rlsc-perspective build && pnpm --dir ../.. --filter @qa-sdk/e2e exec node ../../packages/rlsc-analysis/smoke/accuracy.mjs",
     "build": "tsup",
     "dev": "tsup --watch",
     "prepare": "pnpm build",

@@ -8,7 +8,7 @@ import {
 } from './index.js';
 import type { AreaOverflowIssue, RLSCDocument, RLSCNode } from './index.js';
 
-describe('@qa-sdk/rlsc-analysis public API', () => {
+describe('rlsc-analysis public API', () => {
   it('exports RLSCDocument and issue data types without rendering dependencies', () => {
     const doc = {
       version: '1.0',

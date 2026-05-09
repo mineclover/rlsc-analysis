@@ -1,4 +1,4 @@
-# @qa-sdk/rlsc-analysis
+# rlsc-analysis
 
 Screen analysis package for RLSC. It owns the screen document model, metadata helpers, DOM collection, layout analysis, identifier extraction, and issue detection.
 
@@ -9,7 +9,7 @@ This package does not depend on Three.js or perspective rendering.
 Use metadata helpers when application code can mark component boundaries before collection.
 
 ```ts
-import { createMetadataAttributes, annotateElement } from '@qa-sdk/rlsc-analysis';
+import { createMetadataAttributes, annotateElement } from 'rlsc-analysis';
 
 const attrs = createMetadataAttributes({
   componentId: 'CheckoutForm.SubmitButton',
@@ -30,7 +30,7 @@ Standard attributes:
 ## Analysis-Only Usage
 
 ```ts
-import { analyzeAreas, createNodeIndex, detectAreaOverflow } from '@qa-sdk/rlsc-analysis';
+import { analyzeAreas, createNodeIndex, detectAreaOverflow } from 'rlsc-analysis';
 
 const result = analyzeAreas(doc, { textOccupancies });
 const containmentLeaks = detectAreaOverflow(doc);
@@ -46,10 +46,10 @@ componentId > qaAddress > cssSelector > nodeId
 
 ## Browser Collection
 
-Browser-only APIs are exported from `@qa-sdk/rlsc-analysis/browser`.
+Browser-only APIs are exported from `rlsc-analysis/browser`.
 
 ```ts
-import { collectLayoutWithText, scanScreen } from '@qa-sdk/rlsc-analysis/browser';
+import { collectLayoutWithText, scanScreen } from 'rlsc-analysis/browser';
 
 const { doc, textPrepared } = collectLayoutWithText(document.body, {
   addressAttribute: 'data-qa-address',
@@ -89,7 +89,7 @@ Browser collection records stable re-identification metadata when available:
 Use `createNodeIndex(doc)` when a document was collected elsewhere and only lookup helpers are needed.
 
 ```ts
-import { createNodeIndex } from '@qa-sdk/rlsc-analysis';
+import { createNodeIndex } from 'rlsc-analysis';
 
 const index = createNodeIndex(doc);
 const componentNodes = index.findByComponentId('CheckoutForm.SubmitButton');
@@ -111,7 +111,7 @@ pnpm accuracy:browser
 Inside the qa-sdk monorepo, run:
 
 ```bash
-pnpm --filter @qa-sdk/rlsc-analysis accuracy:browser
+pnpm --filter rlsc-analysis accuracy:browser
 ```
 
 The smoke runs a real Chromium page and reports:

@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { collectLayout, identifyElement, scanScreen } from './browser.js';
 
-describe('@qa-sdk/rlsc-analysis browser collection', () => {
+describe('rlsc-analysis browser collection', () => {
   it('collects xpath, metadata, inferred role, and semantic attributes', () => {
     document.body.innerHTML = `
       <main id="app" data-component-id="App" data-qa-address="demo:app">
