@@ -15,6 +15,18 @@ describe('rlsc-analysis browser collection', () => {
       'z-index',
       'position',
       'overflow',
+      'box-sizing',
+      'flex-direction',
+      'flex-wrap',
+      'justify-content',
+      'align-items',
+      'align-content',
+      'gap',
+      'row-gap',
+      'column-gap',
+      'grid-template-columns',
+      'grid-template-rows',
+      'grid-auto-flow',
       'font',
       'font-size',
       'line-height',
@@ -53,6 +65,35 @@ describe('rlsc-analysis browser collection', () => {
     expect(link?.attributes['href']).toBe('/detail');
     expect(link?.role).toBe('link');
     expect(identified.xpath).toBe('/html[1]/body[1]/main[1]/section[1]/article[1]/a[1]');
+  });
+
+  it('extracts a Figma-oriented standard layout stack from computed style', () => {
+    document.body.innerHTML = `
+      <main id="app" style="display: flex; flex-direction: column; gap: 12px; padding: 8px 10px; justify-content: center; align-items: stretch;">
+        <section class="panel" style="position: absolute; overflow: hidden;">Panel</section>
+      </main>
+    `;
+    setRect('#app', { x: 0, y: 0, width: 320, height: 240 });
+    setRect('.panel', { x: 10, y: 20, width: 200, height: 120 });
+
+    const root = document.querySelector('#app');
+    if (!root) throw new Error('fixture root missing');
+
+    const doc = collectLayout(root);
+    const stack = doc.root.styleStack;
+    const panelStack = doc.root.children[0]?.styleStack;
+
+    expect(stack?.figma.layoutMode).toBe('VERTICAL');
+    expect(stack?.figma.positionMode).toBe('AUTO');
+    expect(stack?.autoLayout).toMatchObject({
+      direction: 'column',
+      gap: 12,
+      justifyContent: 'center',
+      alignItems: 'stretch',
+    });
+    expect(stack?.padding).toEqual({ top: 8, right: 10, bottom: 8, left: 10 });
+    expect(panelStack?.figma.positionMode).toBe('ABSOLUTE');
+    expect(panelStack?.overflow).toBe('hidden');
   });
 });
 

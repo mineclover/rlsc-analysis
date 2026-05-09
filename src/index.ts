@@ -18,6 +18,49 @@ export interface TextFontInfo {
   };
 }
 
+export type FigmaLayoutMode = 'NONE' | 'HORIZONTAL' | 'VERTICAL' | 'GRID';
+export type FigmaPositionMode = 'AUTO' | 'ABSOLUTE';
+
+export interface SpacingBox {
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+  readonly left: number;
+}
+
+export interface AutoLayoutStyleStack {
+  readonly direction: 'row' | 'column';
+  readonly wrap: boolean;
+  readonly gap?: number;
+  readonly rowGap?: number;
+  readonly columnGap?: number;
+  readonly justifyContent: string;
+  readonly alignItems: string;
+  readonly alignContent: string;
+}
+
+export interface GridLayoutStyleStack {
+  readonly templateColumns: string;
+  readonly templateRows: string;
+  readonly autoFlow: string;
+  readonly rowGap?: number;
+  readonly columnGap?: number;
+}
+
+export interface StandardStyleStack {
+  readonly display: string;
+  readonly position: string;
+  readonly boxSizing: string;
+  readonly overflow: string;
+  readonly figma: {
+    readonly layoutMode: FigmaLayoutMode;
+    readonly positionMode: FigmaPositionMode;
+  };
+  readonly padding: SpacingBox;
+  readonly autoLayout?: AutoLayoutStyleStack;
+  readonly grid?: GridLayoutStyleStack;
+}
+
 export interface ScreenIdentifier {
   readonly kind: 'componentId' | 'qaAddress' | 'cssSelector' | 'nodeId';
   readonly value: string;
@@ -45,6 +88,7 @@ export interface RLSCNode {
   readonly debugLabel?: string;
   readonly boundary?: string;
   readonly fontInfo?: TextFontInfo;
+  readonly styleStack?: StandardStyleStack;
   readonly identifier?: ScreenIdentifier;
   readonly attributes: Readonly<Record<string, string>>;
   readonly children: readonly RLSCNode[];

@@ -96,12 +96,33 @@ It does not copy the full CSS declaration into the snapshot.
 | stacking | `z-index` | `RLSCNode.zIndex` | layer ordering and perspective depth |
 | layout | `position` | `RLSCNode.position` | positioning-mode diagnosis |
 | layout | `overflow` | `RLSCNode.overflow` | clipping and containment diagnosis |
+| layout | `box-sizing` | `RLSCNode.styleStack.boxSizing` | frame sizing semantics |
+| layout | `flex-direction`, `flex-wrap` | `RLSCNode.styleStack.autoLayout` | Figma auto layout direction and wrapping |
+| layout | `justify-content`, `align-items`, `align-content` | `RLSCNode.styleStack.autoLayout` | primary and counter-axis alignment |
+| layout | `gap`, `row-gap`, `column-gap` | `RLSCNode.styleStack.autoLayout` / `grid` | item spacing |
+| layout | `grid-template-columns`, `grid-template-rows`, `grid-auto-flow` | `RLSCNode.styleStack.grid` | grid track and placement metadata |
 | text | `font` | `RLSCNode.fontInfo.fontString` | text measurement |
 | text | `font-size`, `line-height` | `RLSCNode.fontInfo.lineHeight` | text height and overflow |
 | text | `text-align` | `RLSCNode.fontInfo.textAlign` | boundary contact direction |
-| text | `padding-*` | `RLSCNode.fontInfo.padding` | content-box text occupancy |
+| text/layout | `padding-*` | `RLSCNode.fontInfo.padding` / `styleStack.padding` | content-box text occupancy and frame padding |
 
 The exported `DEFAULT_INSPECTED_STYLE_FIELDS` constant is the public checklist for these fields.
+
+### Figma-Oriented Style Stack
+
+Each collected node includes `styleStack`, a compact layout stack intended for Figma-style visualization and debugging.
+
+| DOM signal | Stored as | Figma-oriented meaning |
+|---|---|---|
+| `display: flex` | `styleStack.figma.layoutMode` | `HORIZONTAL` or `VERTICAL` auto layout |
+| `display: grid` | `styleStack.figma.layoutMode` | `GRID` layout metadata |
+| non-layout display | `styleStack.figma.layoutMode` | `NONE` |
+| `position: absolute` / `fixed` | `styleStack.figma.positionMode` | `ABSOLUTE` child placement |
+| other position modes | `styleStack.figma.positionMode` | `AUTO` flow placement |
+| `padding-*` | `styleStack.padding` | frame padding |
+| `gap`, `row-gap`, `column-gap` | `styleStack.autoLayout` / `grid` | item spacing |
+
+This stack is intentionally descriptive rather than a full CSS clone. It should be used as the standard bridge between DOM scanning and perspective/Figma-like renderers.
 
 ## Node Index
 

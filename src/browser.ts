@@ -14,6 +14,7 @@ import {
   type RLSCNode,
   type RLSCNodeIndex,
   type ScreenIdentifier,
+  type StandardStyleStack,
   type TextOccupancy,
   type TextPreparedMap,
   analyzeTextOccupancy,
@@ -118,6 +119,78 @@ export const DEFAULT_INSPECTED_STYLE_FIELDS: readonly InspectedStyleField[] = [
     purpose: 'preserve clipping intent for containment and overflow diagnosis',
   },
   {
+    property: 'box-sizing',
+    category: 'layout',
+    storedAs: 'RLSCNode.styleStack.boxSizing',
+    purpose: 'match DOM geometry with Figma frame sizing semantics',
+  },
+  {
+    property: 'flex-direction',
+    category: 'layout',
+    storedAs: 'RLSCNode.styleStack.autoLayout.direction',
+    purpose: 'map flex containers to Figma horizontal or vertical auto layout',
+  },
+  {
+    property: 'flex-wrap',
+    category: 'layout',
+    storedAs: 'RLSCNode.styleStack.autoLayout.wrap',
+    purpose: 'preserve wrapped auto layout behavior',
+  },
+  {
+    property: 'justify-content',
+    category: 'layout',
+    storedAs: 'RLSCNode.styleStack.autoLayout.justifyContent',
+    purpose: 'map primary-axis alignment',
+  },
+  {
+    property: 'align-items',
+    category: 'layout',
+    storedAs: 'RLSCNode.styleStack.autoLayout.alignItems',
+    purpose: 'map counter-axis alignment',
+  },
+  {
+    property: 'align-content',
+    category: 'layout',
+    storedAs: 'RLSCNode.styleStack.autoLayout.alignContent',
+    purpose: 'map wrapped-line counter-axis alignment',
+  },
+  {
+    property: 'gap',
+    category: 'layout',
+    storedAs: 'RLSCNode.styleStack.autoLayout.gap',
+    purpose: 'map CSS gap to Figma item spacing',
+  },
+  {
+    property: 'row-gap',
+    category: 'layout',
+    storedAs: 'RLSCNode.styleStack.autoLayout.rowGap / grid.rowGap',
+    purpose: 'preserve vertical spacing',
+  },
+  {
+    property: 'column-gap',
+    category: 'layout',
+    storedAs: 'RLSCNode.styleStack.autoLayout.columnGap / grid.columnGap',
+    purpose: 'preserve horizontal spacing',
+  },
+  {
+    property: 'grid-template-columns',
+    category: 'layout',
+    storedAs: 'RLSCNode.styleStack.grid.templateColumns',
+    purpose: 'map grid containers to Figma grid layout metadata',
+  },
+  {
+    property: 'grid-template-rows',
+    category: 'layout',
+    storedAs: 'RLSCNode.styleStack.grid.templateRows',
+    purpose: 'map grid row tracks',
+  },
+  {
+    property: 'grid-auto-flow',
+    category: 'layout',
+    storedAs: 'RLSCNode.styleStack.grid.autoFlow',
+    purpose: 'preserve grid placement flow',
+  },
+  {
     property: 'font',
     category: 'text',
     storedAs: 'RLSCNode.fontInfo.fontString',
@@ -144,10 +217,85 @@ export const DEFAULT_INSPECTED_STYLE_FIELDS: readonly InspectedStyleField[] = [
   {
     property: 'padding-*',
     category: 'text',
-    storedAs: 'RLSCNode.fontInfo.padding',
-    purpose: 'separate content box from visual border box for text occupancy',
+    storedAs: 'RLSCNode.fontInfo.padding / styleStack.padding',
+    purpose: 'separate content box from visual border box and map Figma frame padding',
   },
 ] as const;
+
+function readPx(value: string): number | undefined {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function readSpacingBox(style: CSSStyleDeclaration): StandardStyleStack['padding'] {
+  return {
+    top: readPx(style.paddingTop) ?? 0,
+    right: readPx(style.paddingRight) ?? 0,
+    bottom: readPx(style.paddingBottom) ?? 0,
+    left: readPx(style.paddingLeft) ?? 0,
+  };
+}
+
+function inferFigmaLayoutMode(style: CSSStyleDeclaration): StandardStyleStack['figma']['layoutMode'] {
+  if (style.display.includes('grid')) return 'GRID';
+  if (style.display.includes('flex')) {
+    return style.flexDirection.startsWith('column') ? 'VERTICAL' : 'HORIZONTAL';
+  }
+  return 'NONE';
+}
+
+function extractStyleStack(style: CSSStyleDeclaration): StandardStyleStack {
+  const layoutMode = inferFigmaLayoutMode(style);
+  const stack: StandardStyleStack = {
+    display: style.display,
+    position: style.position,
+    boxSizing: style.boxSizing,
+    overflow: style.overflow,
+    figma: {
+      layoutMode,
+      positionMode: style.position === 'absolute' || style.position === 'fixed' ? 'ABSOLUTE' : 'AUTO',
+    },
+    padding: readSpacingBox(style),
+  };
+
+  if (layoutMode === 'HORIZONTAL' || layoutMode === 'VERTICAL') {
+    const gap = readPx(style.gap);
+    const rowGap = readPx(style.rowGap);
+    const columnGap = readPx(style.columnGap);
+
+    return {
+      ...stack,
+      autoLayout: {
+        direction: layoutMode === 'VERTICAL' ? 'column' : 'row',
+        wrap: style.flexWrap !== 'nowrap',
+        ...(gap !== undefined ? { gap } : {}),
+        ...(rowGap !== undefined ? { rowGap } : {}),
+        ...(columnGap !== undefined ? { columnGap } : {}),
+        justifyContent: style.justifyContent,
+        alignItems: style.alignItems,
+        alignContent: style.alignContent,
+      },
+    };
+  }
+
+  if (layoutMode === 'GRID') {
+    const rowGap = readPx(style.rowGap);
+    const columnGap = readPx(style.columnGap);
+
+    return {
+      ...stack,
+      grid: {
+        templateColumns: style.gridTemplateColumns,
+        templateRows: style.gridTemplateRows,
+        autoFlow: style.gridAutoFlow,
+        ...(rowGap !== undefined ? { rowGap } : {}),
+        ...(columnGap !== undefined ? { columnGap } : {}),
+      },
+    };
+  }
+
+  return stack;
+}
 
 export function collectLayout(root?: Element, options: CollectorOptions = {}): RLSCDocument {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
@@ -339,6 +487,7 @@ function collectNode(
     address: qaAddress,
     debugLabel: attributes[DATA_DEBUG_LABEL_ATTRIBUTE],
     boundary: attributes[DATA_BOUNDARY_ATTRIBUTE],
+    styleStack: extractStyleStack(style),
     fontInfo:
       options.collectFontInfo === false
         ? undefined
