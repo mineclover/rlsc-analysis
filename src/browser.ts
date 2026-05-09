@@ -77,6 +77,78 @@ let nodeCounter = 0;
 
 const SKIP_TAGS = new Set(['script', 'style', 'noscript', 'link', 'meta', 'head', 'br', 'wbr']);
 
+export type InspectedStyleCategory = 'visibility' | 'stacking' | 'layout' | 'text';
+
+export interface InspectedStyleField {
+  readonly property: string;
+  readonly category: InspectedStyleCategory;
+  readonly storedAs: string;
+  readonly purpose: string;
+}
+
+export const DEFAULT_INSPECTED_STYLE_FIELDS: readonly InspectedStyleField[] = [
+  {
+    property: 'display',
+    category: 'visibility',
+    storedAs: 'RLSCNode.display',
+    purpose: 'exclude display:none nodes unless includeHidden is enabled',
+  },
+  {
+    property: 'visibility',
+    category: 'visibility',
+    storedAs: 'RLSCNode.visible',
+    purpose: 'exclude visibility:hidden nodes unless includeHidden is enabled',
+  },
+  {
+    property: 'z-index',
+    category: 'stacking',
+    storedAs: 'RLSCNode.zIndex',
+    purpose: 'order overlapping layers and build perspective depth',
+  },
+  {
+    property: 'position',
+    category: 'layout',
+    storedAs: 'RLSCNode.position',
+    purpose: 'preserve positioning mode for layout diagnosis',
+  },
+  {
+    property: 'overflow',
+    category: 'layout',
+    storedAs: 'RLSCNode.overflow',
+    purpose: 'preserve clipping intent for containment and overflow diagnosis',
+  },
+  {
+    property: 'font',
+    category: 'text',
+    storedAs: 'RLSCNode.fontInfo.fontString',
+    purpose: 'estimate text occupancy with the same font used by the browser',
+  },
+  {
+    property: 'font-size',
+    category: 'text',
+    storedAs: 'RLSCNode.fontInfo.lineHeight fallback',
+    purpose: 'derive line-height when computed line-height is not numeric',
+  },
+  {
+    property: 'line-height',
+    category: 'text',
+    storedAs: 'RLSCNode.fontInfo.lineHeight',
+    purpose: 'estimate text block height and overflow',
+  },
+  {
+    property: 'text-align',
+    category: 'text',
+    storedAs: 'RLSCNode.fontInfo.textAlign',
+    purpose: 'estimate text boundary contact direction',
+  },
+  {
+    property: 'padding-*',
+    category: 'text',
+    storedAs: 'RLSCNode.fontInfo.padding',
+    purpose: 'separate content box from visual border box for text occupancy',
+  },
+] as const;
+
 export function collectLayout(root?: Element, options: CollectorOptions = {}): RLSCDocument {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     throw new Error('collectLayout is only available in a browser environment');

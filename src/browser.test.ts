@@ -1,8 +1,29 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest';
-import { collectLayout, identifyElement, scanScreen } from './browser.js';
+import {
+  DEFAULT_INSPECTED_STYLE_FIELDS,
+  collectLayout,
+  identifyElement,
+  scanScreen,
+} from './browser.js';
 
 describe('rlsc-analysis browser collection', () => {
+  it('documents the default computed style fields used by the inspector', () => {
+    expect(DEFAULT_INSPECTED_STYLE_FIELDS.map((field) => field.property)).toEqual([
+      'display',
+      'visibility',
+      'z-index',
+      'position',
+      'overflow',
+      'font',
+      'font-size',
+      'line-height',
+      'text-align',
+      'padding-*',
+    ]);
+    expect(DEFAULT_INSPECTED_STYLE_FIELDS.map((field) => field.category)).toContain('text');
+  });
+
   it('collects xpath, metadata, inferred role, and semantic attributes', () => {
     document.body.innerHTML = `
       <main id="app" data-component-id="App" data-qa-address="demo:app">

@@ -84,6 +84,25 @@ Browser collection records stable re-identification metadata when available:
 - `debugLabel`
 - `boundary`
 
+### Default Style Inspection
+
+The browser inspector intentionally records only layout-critical computed style.
+It does not copy the full CSS declaration into the snapshot.
+
+| Category | Computed style | Stored as | Used for |
+|---|---|---|---|
+| visibility | `display` | `RLSCNode.display` | hide/filter `display: none` nodes |
+| visibility | `visibility` | `RLSCNode.visible` | hide/filter `visibility: hidden` nodes |
+| stacking | `z-index` | `RLSCNode.zIndex` | layer ordering and perspective depth |
+| layout | `position` | `RLSCNode.position` | positioning-mode diagnosis |
+| layout | `overflow` | `RLSCNode.overflow` | clipping and containment diagnosis |
+| text | `font` | `RLSCNode.fontInfo.fontString` | text measurement |
+| text | `font-size`, `line-height` | `RLSCNode.fontInfo.lineHeight` | text height and overflow |
+| text | `text-align` | `RLSCNode.fontInfo.textAlign` | boundary contact direction |
+| text | `padding-*` | `RLSCNode.fontInfo.padding` | content-box text occupancy |
+
+The exported `DEFAULT_INSPECTED_STYLE_FIELDS` constant is the public checklist for these fields.
+
 ## Node Index
 
 Use `createNodeIndex(doc)` when a document was collected elsewhere and only lookup helpers are needed.
