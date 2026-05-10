@@ -73,17 +73,26 @@ export interface AdapterCoverage {
   readonly unsupported: readonly string[];
 }
 
-export type GraphicsAdapterDiagnosticCode =
+export type GraphicsAdapterDiagnosticReason =
   | 'unsupported-layout-mode'
   | 'unsupported-target-value'
   | 'unknown-source-value'
   | 'lossy-target-equivalent';
 
+export type GraphicsAdapterDiagnosticCode = GraphicsAdapterDiagnosticReason;
+
 export interface GraphicsAdapterDiagnostic {
-  readonly adapter: GraphicsAdapterId;
+  readonly adapterId: GraphicsAdapterId;
+  readonly adapter?: GraphicsAdapterId;
+  readonly reason: GraphicsAdapterDiagnosticReason;
   readonly code: GraphicsAdapterDiagnosticCode;
-  readonly message: string;
+  readonly field: string;
   readonly path: string;
+  readonly sourceValue: string;
+  readonly targetValue: string | null;
+  readonly severity: 'degraded' | 'unsupported';
+  readonly sourceAuthority: readonly AdapterSourceAuthority[];
+  readonly message?: string;
 }
 
 export interface GraphicsAdapterConversion<T> {
@@ -328,7 +337,14 @@ export function toFigmaAutoLayoutFromGraphicsLayoutWithDiagnostics(
 ): GraphicsAdapterConversion<GraphicsFigmaAutoLayoutSpec> | null {
   if (!layout || layout.mode !== 'stack' || layout.axis === null) {
     if (layout) {
-      pushDiagnostic(options.onDiagnostic, createDiagnostic('unsupported-layout-mode', layout, 'mode'));
+      const diagnostic = createDiagnostic({
+        reason: 'unsupported-layout-mode',
+        field: 'mode',
+        sourceValue: layout.mode,
+        targetValue: null,
+        severity: 'unsupported',
+      });
+      diagnosticsBufferPush(options.onDiagnostic, diagnostic);
     }
     return null;
   }
@@ -338,24 +354,27 @@ export function toFigmaAutoLayoutFromGraphicsLayoutWithDiagnostics(
 
   const primaryAxisSizingMode = toFigmaSizingModeWithDiagnostics(
     layout.axis === 'horizontal' ? layout.sizing.width : layout.sizing.height,
-    'sizing.width',
+    layout.axis === 'horizontal' ? 'sizing.width' : 'sizing.height',
     onDiagnostic,
     diagnostics,
   );
   const counterAxisSizingMode = toFigmaSizingModeWithDiagnostics(
     layout.axis === 'horizontal' ? layout.sizing.height : layout.sizing.width,
-    'sizing.height',
+    layout.axis === 'horizontal' ? 'sizing.height' : 'sizing.width',
     onDiagnostic,
     diagnostics,
   );
 
   if (layout.alignContent !== 'space-between') {
-    const diagnostic = createDiagnostic(
-      'lossy-target-equivalent',
-      layout,
-      'alignContent',
-      `alignContent "${layout.alignContent}" does not round-trip to a dedicated Figma counterAxisAlignContent mode; using AUTO.`,
-    );
+    const diagnostic = createDiagnostic({
+      reason: 'lossy-target-equivalent',
+      field: 'alignContent',
+      sourceValue: layout.alignContent,
+      targetValue: 'AUTO',
+      severity: 'degraded',
+      customMessage:
+        `alignContent "${layout.alignContent}" does not round-trip to a dedicated Figma counterAxisAlignContent mode; using AUTO.`,
+    });
     diagnostics.push(diagnostic);
     onDiagnostic(diagnostic);
   }
@@ -387,18 +406,30 @@ export function toFigmaAutoLayoutFromGraphicsLayoutWithDiagnostics(
 }
 
 function createDiagnostic(
-  code: GraphicsAdapterDiagnosticCode,
-  layout: GraphicsLayoutSpec,
-  path: string,
-  customMessage?: string,
+  args: {
+    reason: GraphicsAdapterDiagnosticReason;
+    field: string;
+    sourceValue: string;
+    targetValue: string | null;
+    severity: 'degraded' | 'unsupported';
+    customMessage?: string;
+  },
 ): GraphicsAdapterDiagnostic {
+  const sourceAuthority = getFigmaCoverage().sourceAuthority;
   return {
+    adapterId: 'figma',
     adapter: 'figma',
-    code,
-    path,
+    reason: args.reason,
+    code: args.reason,
+    field: args.field,
+    path: args.field,
+    sourceValue: args.sourceValue,
+    targetValue: args.targetValue,
+    severity: args.severity,
+    sourceAuthority,
     message:
-      customMessage ??
-      `layout.${path}="${(layout as unknown as Record<string, string>)[path]}" is lossy/unsupported for Figma auto-layout conversion.`,
+      args.customMessage ??
+      `layout.${args.field}="${args.sourceValue}" is lossy/unsupported for Figma auto-layout conversion.`,
   };
 }
 
@@ -410,12 +441,15 @@ function toFigmaSizingModeWithDiagnostics(
 ): 'FIXED' | 'AUTO' {
   if (value === 'fill') {
     const diagnostic = {
-      adapter: 'figma' as const,
-      code: 'unsupported-target-value' as const,
-      path,
-      message:
-        'fill sizing is not supported by Figma auto-layout sizing; using FIXED.',
-    } satisfies GraphicsAdapterDiagnostic;
+      ...createDiagnostic({
+        reason: 'unsupported-target-value',
+        field: path,
+        sourceValue: value,
+        targetValue: 'FIXED',
+        severity: 'unsupported',
+        customMessage: 'fill sizing is not supported by Figma auto-layout sizing; using FIXED.',
+      }),
+    };
     diagnostics.push(diagnostic);
     onDiagnostic(diagnostic);
     return 'FIXED';
@@ -423,11 +457,15 @@ function toFigmaSizingModeWithDiagnostics(
 
   if (value === 'unknown') {
     const diagnostic = {
-      adapter: 'figma' as const,
-      code: 'unknown-source-value' as const,
-      path,
-      message: 'unknown sizing source value; defaulting to FIXED for safety.',
-    } satisfies GraphicsAdapterDiagnostic;
+      ...createDiagnostic({
+        reason: 'unknown-source-value',
+        field: path,
+        sourceValue: value,
+        targetValue: 'FIXED',
+        severity: 'degraded',
+        customMessage: 'unknown sizing source value; defaulting to FIXED for safety.',
+      }),
+    };
     diagnostics.push(diagnostic);
     onDiagnostic(diagnostic);
     return 'FIXED';
@@ -436,7 +474,7 @@ function toFigmaSizingModeWithDiagnostics(
   return value === 'hug' ? 'AUTO' : 'FIXED';
 }
 
-function pushDiagnostic(
+function diagnosticsBufferPush(
   onDiagnostic: GraphicsAdapterConversionOptions['onDiagnostic'],
   diagnostic: GraphicsAdapterDiagnostic,
 ) {

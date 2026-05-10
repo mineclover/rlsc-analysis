@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type {
   FigmaAxisAlign,
-  GraphicsAdapterDiagnosticCode,
+  GraphicsAdapterDiagnostic,
   GraphicsLayoutSpec,
   RLSCNode,
   StandardStyleStack,
@@ -430,6 +430,26 @@ describe('graphics interface adapter coverage and diagnostics', () => {
       expect(coverage.degraded.length).toBeGreaterThan(0);
       expect(coverage.unsupported.length).toBeGreaterThan(0);
     }
+
+    const figmaCoverage = getFigmaCoverage();
+    const row = rows.figma;
+    expect(row).toBeDefined();
+    if (row) {
+      const rowText = `${row.primary} ${row.secondary}`.toLowerCase().replace(/`/g, '');
+      for (const authority of figmaCoverage.sourceAuthority) {
+        expect(rowText).toContain(authority.name.toLowerCase().replace(/`/g, ''));
+        if (authority.locator.startsWith('http') || authority.locator.includes('@')) {
+          expect(specText).toContain(authority.locator);
+        }
+      }
+    }
+
+    expect(figmaCoverage.sourceAuthority.map((authority) => authority.locator)).toContain(
+      'https://developers.figma.com/docs/plugins/api/typings/',
+    );
+    expect(figmaCoverage.sourceAuthority.map((authority) => authority.locator)).toContain(
+      '@figma/plugin-typings',
+    );
   });
 
   it('returns null with unsupported diagnostic for absolute and group non-stack modes', () => {
@@ -451,20 +471,37 @@ describe('graphics interface adapter coverage and diagnostics', () => {
       ...absoluteModeLayout,
       mode: 'group',
     };
-    const absoluteDiagnostics: GraphicsAdapterDiagnosticCode[] = [];
-    const groupDiagnostics: GraphicsAdapterDiagnosticCode[] = [];
+    const absoluteDiagnostics: GraphicsAdapterDiagnostic[] = [];
+    const groupDiagnostics: GraphicsAdapterDiagnostic[] = [];
 
     const absoluteResult = toFigmaAutoLayoutFromGraphicsLayoutWithDiagnostics(absoluteModeLayout, {
-      onDiagnostic: (diagnostic) => absoluteDiagnostics.push(diagnostic.code),
+      onDiagnostic: (diagnostic) => absoluteDiagnostics.push(diagnostic),
     });
     const groupResult = toFigmaAutoLayoutFromGraphicsLayoutWithDiagnostics(groupModeLayout, {
-      onDiagnostic: (diagnostic) => groupDiagnostics.push(diagnostic.code),
+      onDiagnostic: (diagnostic) => groupDiagnostics.push(diagnostic),
     });
 
     expect(absoluteResult).toBeNull();
     expect(groupResult).toBeNull();
-    expect(absoluteDiagnostics).toContain('unsupported-layout-mode');
-    expect(groupDiagnostics).toContain('unsupported-layout-mode');
+    expect(absoluteDiagnostics).toHaveLength(1);
+    expect(groupDiagnostics).toHaveLength(1);
+    expect(absoluteDiagnostics[0]?.reason).toBe('unsupported-layout-mode');
+    expect(absoluteDiagnostics[0]?.severity).toBe('unsupported');
+    expect(absoluteDiagnostics[0]?.field).toBe('mode');
+    expect(absoluteDiagnostics[0]?.path).toBe('mode');
+    expect(absoluteDiagnostics[0]?.sourceValue).toBe('absolute');
+    expect(absoluteDiagnostics[0]?.targetValue).toBeNull();
+    expect(absoluteDiagnostics[0]?.adapterId).toBe('figma');
+    expect(absoluteDiagnostics[0]?.sourceAuthority).toEqual(getFigmaCoverage().sourceAuthority);
+
+    expect(groupDiagnostics[0]?.reason).toBe('unsupported-layout-mode');
+    expect(groupDiagnostics[0]?.severity).toBe('unsupported');
+    expect(groupDiagnostics[0]?.field).toBe('mode');
+    expect(groupDiagnostics[0]?.path).toBe('mode');
+    expect(groupDiagnostics[0]?.sourceValue).toBe('group');
+    expect(groupDiagnostics[0]?.targetValue).toBeNull();
+    expect(groupDiagnostics[0]?.adapterId).toBe('figma');
+    expect(groupDiagnostics[0]?.sourceAuthority).toEqual(getFigmaCoverage().sourceAuthority);
     expect(toFigmaAutoLayoutFromGraphicsLayout(absoluteModeLayout)).toBeNull();
     expect(toFigmaAutoLayoutFromGraphicsLayout(groupModeLayout)).toBeNull();
   });
@@ -485,21 +522,41 @@ describe('graphics interface adapter coverage and diagnostics', () => {
       sizing: { width: 'fill', height: 'unknown' },
     };
 
-    const diagnostics: GraphicsAdapterDiagnosticCode[] = [];
+    const diagnostics: GraphicsAdapterDiagnostic[] = [];
     const result = toFigmaAutoLayoutFromGraphicsLayoutWithDiagnostics(fillUnknownSizingLayout, {
-      onDiagnostic: (diagnostic) => diagnostics.push(diagnostic.code),
+      onDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
     });
+    const unsupportedSizingDiagnostic = diagnostics.find(
+      (entry) => entry.reason === 'unsupported-target-value',
+    );
+    const unknownSizingDiagnostic = diagnostics.find(
+      (entry) => entry.reason === 'unknown-source-value',
+    );
 
     expect(result?.artifact.primaryAxisSizingMode).toBe('FIXED');
     expect(result?.artifact.counterAxisSizingMode).toBe('FIXED');
-    expect(diagnostics).toContain('unsupported-target-value');
-    expect(diagnostics).toContain('unknown-source-value');
-    expect(
-      result?.diagnostics.find((entry) => entry.code === 'unsupported-target-value')?.path,
-    ).toBe('sizing.width');
-    expect(result?.diagnostics.find((entry) => entry.code === 'unknown-source-value')?.path).toBe(
-      'sizing.height',
-    );
+    expect(unsupportedSizingDiagnostic).toMatchObject({
+      reason: 'unsupported-target-value',
+      severity: 'unsupported',
+      field: 'sizing.width',
+      path: 'sizing.width',
+      sourceValue: 'fill',
+      targetValue: 'FIXED',
+      adapterId: 'figma',
+      code: 'unsupported-target-value',
+      sourceAuthority: getFigmaCoverage().sourceAuthority,
+    });
+    expect(unknownSizingDiagnostic).toMatchObject({
+      reason: 'unknown-source-value',
+      severity: 'degraded',
+      field: 'sizing.height',
+      path: 'sizing.height',
+      sourceValue: 'unknown',
+      targetValue: 'FIXED',
+      adapterId: 'figma',
+      code: 'unknown-source-value',
+      sourceAuthority: getFigmaCoverage().sourceAuthority,
+    });
   });
 
   it('emits lossy diagnostic when alignContent fallback is AUTO', () => {
@@ -518,12 +575,22 @@ describe('graphics interface adapter coverage and diagnostics', () => {
       sizing: { width: 'fixed', height: 'fixed' },
     };
 
-    const diagnostics: GraphicsAdapterDiagnosticCode[] = [];
+    const diagnostics: GraphicsAdapterDiagnostic[] = [];
     const result = toFigmaAutoLayoutFromGraphicsLayoutWithDiagnostics(lossyAlignLayout, {
-      onDiagnostic: (diagnostic) => diagnostics.push(diagnostic.code),
+      onDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
     });
 
     expect(result?.artifact.counterAxisAlignContent).toBe('AUTO');
-    expect(diagnostics).toContain('lossy-target-equivalent');
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toMatchObject({
+      reason: 'lossy-target-equivalent',
+      severity: 'degraded',
+      sourceValue: 'start',
+      targetValue: 'AUTO',
+      field: 'alignContent',
+      path: 'alignContent',
+      adapterId: 'figma',
+      sourceAuthority: getFigmaCoverage().sourceAuthority,
+    });
   });
 });

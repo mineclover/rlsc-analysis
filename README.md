@@ -147,7 +147,12 @@ const figmaLayout = canonical ? toFigmaAutoLayoutFromGraphicsLayout(canonical) :
 const figmaWithDiagnostics = canonical
   ? toFigmaAutoLayoutFromGraphicsLayoutWithDiagnostics(canonical, {
       onDiagnostic: (diagnostic: GraphicsAdapterDiagnostic) => {
-        console.debug(diagnostic.code, diagnostic.message);
+        console.debug(
+          diagnostic.reason,
+          diagnostic.severity,
+          diagnostic.field,
+          diagnostic.sourceValue,
+        );
       },
     })
   : null;
