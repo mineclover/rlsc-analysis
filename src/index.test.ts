@@ -5,6 +5,10 @@ import {
   createNodeIndex,
   detectAreaOverflow,
   findNodeByXPath,
+  getFigmaCoverage,
+  getGraphicsAdapterCoverage,
+  getGraphicsAdapterCoverages,
+  toFigmaAutoLayoutFromGraphicsLayout,
 } from './index.js';
 import type { AreaOverflowIssue, RLSCDocument, RLSCNode } from './index.js';
 
@@ -42,6 +46,13 @@ describe('rlsc-analysis public API', () => {
 
     expect(doc.root.id).toBe('root');
     expect(issue.childId).toBe('child');
+  });
+
+  it('exports graphics adapter conversion and coverage APIs', () => {
+    expect(getFigmaCoverage().id).toBe('figma');
+    expect(getGraphicsAdapterCoverage('figma')?.id).toBe('figma');
+    expect(getGraphicsAdapterCoverages()).toHaveLength(5);
+    expect(toFigmaAutoLayoutFromGraphicsLayout(null)).toBeNull();
   });
 });
 

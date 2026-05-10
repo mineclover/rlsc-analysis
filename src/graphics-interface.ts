@@ -2,7 +2,7 @@
 import type { FigmaLayoutMode, RLSCNode, StandardStyleStack } from './index.js';
 
 export type GraphicsAxis = 'horizontal' | 'vertical';
-export type GraphicsLayoutMode = 'none' | 'stack' | 'grid';
+export type GraphicsLayoutMode = 'none' | 'stack' | 'grid' | 'absolute' | 'group';
 export type GraphicsAxisAlign =
   | 'start'
   | 'center'
@@ -55,6 +55,46 @@ export interface GraphicsInterfaceNode {
   readonly children: readonly GraphicsInterfaceNode[];
 }
 
+export type GraphicsAdapterId = 'css-dom' | 'figma' | 'pencil' | 'photoshop' | 'stitch';
+
+export type AdapterSourceAuthorityKind = 'docs' | 'mcp' | 'types' | 'fixture';
+
+export interface AdapterSourceAuthority {
+  readonly kind: AdapterSourceAuthorityKind;
+  readonly name: string;
+  readonly locator: string;
+}
+
+export interface AdapterCoverage {
+  readonly id: GraphicsAdapterId;
+  readonly sourceAuthority: readonly AdapterSourceAuthority[];
+  readonly supported: readonly string[];
+  readonly degraded: readonly string[];
+  readonly unsupported: readonly string[];
+}
+
+export type GraphicsAdapterDiagnosticCode =
+  | 'unsupported-layout-mode'
+  | 'unsupported-target-value'
+  | 'unknown-source-value'
+  | 'lossy-target-equivalent';
+
+export interface GraphicsAdapterDiagnostic {
+  readonly adapter: GraphicsAdapterId;
+  readonly code: GraphicsAdapterDiagnosticCode;
+  readonly message: string;
+  readonly path: string;
+}
+
+export interface GraphicsAdapterConversion<T> {
+  readonly artifact: T;
+  readonly diagnostics: readonly GraphicsAdapterDiagnostic[];
+}
+
+export interface GraphicsAdapterConversionOptions {
+  readonly onDiagnostic?: (diagnostic: GraphicsAdapterDiagnostic) => void;
+}
+
 export type FigmaAxisAlign =
   | 'MIN'
   | 'CENTER'
@@ -75,6 +115,134 @@ export interface GraphicsFigmaAutoLayoutSpec {
   readonly counterAxisAlignContent: 'AUTO' | 'SPACE_BETWEEN';
   readonly primaryAxisSizingMode: 'FIXED' | 'AUTO';
   readonly counterAxisSizingMode: 'FIXED' | 'AUTO';
+}
+
+const CSS_DOM_GRAPHICS_ADAPTER_COVERAGE: AdapterCoverage = {
+  id: 'css-dom',
+  sourceAuthority: [
+    {
+      kind: 'docs',
+      name: 'Web platform computed style + DOM geometry',
+      locator: 'Web platform computed style + DOM geometry',
+    },
+    {
+      kind: 'types',
+      name: 'TypeScript `lib.dom.d.ts`, browser smoke fixtures',
+      locator: 'browser smoke fixtures',
+    },
+  ],
+  supported: ['computed style', 'dom geometry', 'raw style stack persistence'],
+  degraded: ['position absolute/fixed nuance'],
+  unsupported: ['native layout graph transforms'],
+};
+
+const FIGMA_GRAPHICS_ADAPTER_COVERAGE: AdapterCoverage = {
+  id: 'figma',
+  sourceAuthority: [
+    {
+      kind: 'docs',
+      name: 'Figma Plugin API docs',
+      locator: 'https://developers.figma.com/docs/plugins/api/typings/',
+    },
+    {
+      kind: 'types',
+      name: '@figma/plugin-typings package',
+      locator: '@figma/plugin-typings',
+    },
+  ],
+  supported: ['stack axis and wrapping', 'gap', 'padding', 'alignment', 'sizing'],
+  degraded: ['alignContent non-space-between', 'sizing.fill', 'alignItems space-around/evenly'],
+  unsupported: ['native CSS grid'],
+};
+
+const PENCIL_GRAPHICS_ADAPTER_COVERAGE: AdapterCoverage = {
+  id: 'pencil',
+  sourceAuthority: [
+    {
+      kind: 'docs',
+      name: 'Pencil .pen format docs',
+      locator: 'https://docs.pencil.dev/for-developers/the-pen-format',
+    },
+    { kind: 'fixture', name: '.pen fixture files', locator: '.pen fixture files' },
+  ],
+  supported: ['placeholder pending'],
+  degraded: ['placeholder pending'],
+  unsupported: ['native Figma/PDF export behaviors'],
+};
+
+const PHOTOSHOP_GRAPHICS_ADAPTER_COVERAGE: AdapterCoverage = {
+  id: 'photoshop',
+  sourceAuthority: [
+    {
+      kind: 'docs',
+      name: 'Adobe Photoshop UXP docs',
+      locator: 'https://developer.adobe.com/photoshop/uxp/',
+    },
+    {
+      kind: 'types',
+      name: 'UXP/Photoshop type declarations when installed',
+      locator: 'UXP/Photoshop type declarations when installed',
+    },
+  ],
+  supported: ['placeholder pending'],
+  degraded: ['placeholder pending'],
+  unsupported: ['native auto layout'],
+};
+
+const STITCH_GRAPHICS_ADAPTER_COVERAGE: AdapterCoverage = {
+  id: 'stitch',
+  sourceAuthority: [
+    {
+      kind: 'mcp',
+      name: 'Stitch MCP setup and exposed MCP tools',
+      locator: 'https://stitch.withgoogle.com/docs/mcp/setup',
+    },
+    {
+      kind: 'docs',
+      name: 'generated screen code/artifacts',
+      locator: 'generated screen code/artifacts',
+    },
+  ],
+  supported: ['placeholder pending'],
+  degraded: ['placeholder pending'],
+  unsupported: ['native adapter contract'],
+};
+
+const GRAPHICS_ADAPTER_COVERAGES: Record<GraphicsAdapterId, AdapterCoverage> = {
+  'css-dom': CSS_DOM_GRAPHICS_ADAPTER_COVERAGE,
+  figma: FIGMA_GRAPHICS_ADAPTER_COVERAGE,
+  pencil: PENCIL_GRAPHICS_ADAPTER_COVERAGE,
+  photoshop: PHOTOSHOP_GRAPHICS_ADAPTER_COVERAGE,
+  stitch: STITCH_GRAPHICS_ADAPTER_COVERAGE,
+};
+
+export const GRAPHICS_ADAPTER_IDS: readonly GraphicsAdapterId[] = [
+  'css-dom',
+  'figma',
+  'pencil',
+  'photoshop',
+  'stitch',
+] as const;
+
+export function getCssDomCoverage(): AdapterCoverage {
+  return CSS_DOM_GRAPHICS_ADAPTER_COVERAGE;
+}
+
+export function getFigmaCoverage(): AdapterCoverage {
+  return FIGMA_GRAPHICS_ADAPTER_COVERAGE;
+}
+
+export function getGraphicsAdapterCoverage(id: string): AdapterCoverage | undefined {
+  if (!isGraphicsAdapterId(id)) return undefined;
+  return GRAPHICS_ADAPTER_COVERAGES[id];
+}
+
+export function getGraphicsAdapterCoverages(): readonly AdapterCoverage[] {
+  return GRAPHICS_ADAPTER_IDS.map((id) => GRAPHICS_ADAPTER_COVERAGES[id]);
+}
+
+export function isGraphicsAdapterId(value: string): value is GraphicsAdapterId {
+  return GRAPHICS_ADAPTER_IDS.includes(value as GraphicsAdapterId);
 }
 
 export function normalizeGraphicsLayoutSpecFromStyleStack(
@@ -147,24 +315,63 @@ export function toGraphicsInterfaceNode(node: RLSCNode): GraphicsInterfaceNode {
 
 export function toFigmaAutoLayoutFromGraphicsLayout(
   layout: GraphicsLayoutSpec | null,
+  options?: GraphicsAdapterConversionOptions,
 ): GraphicsFigmaAutoLayoutSpec | null {
-  if (!layout || layout.mode !== 'stack' || layout.axis === null) return null;
+  const result = toFigmaAutoLayoutFromGraphicsLayoutWithDiagnostics(layout, options);
+  if (!result) return null;
+  return result.artifact;
+}
 
-  const itemSpacing = layout.axis === 'horizontal' ? layout.columnGap : layout.rowGap;
-  const counterAxisSpacing =
-    layout.wraps === true && layout.axis === 'horizontal'
-      ? layout.rowGap
-      : layout.axis === 'horizontal'
-        ? 0
-        : layout.wraps
-          ? layout.columnGap
-          : 0;
+export function toFigmaAutoLayoutFromGraphicsLayoutWithDiagnostics(
+  layout: GraphicsLayoutSpec | null,
+  options: GraphicsAdapterConversionOptions = {},
+): GraphicsAdapterConversion<GraphicsFigmaAutoLayoutSpec> | null {
+  if (!layout || layout.mode !== 'stack' || layout.axis === null) {
+    if (layout) {
+      pushDiagnostic(options.onDiagnostic, createDiagnostic('unsupported-layout-mode', layout, 'mode'));
+    }
+    return null;
+  }
 
-  return {
+  const diagnostics: GraphicsAdapterDiagnostic[] = [];
+  const onDiagnostic = options.onDiagnostic ?? (() => undefined);
+
+  const primaryAxisSizingMode = toFigmaSizingModeWithDiagnostics(
+    layout.axis === 'horizontal' ? layout.sizing.width : layout.sizing.height,
+    'sizing.width',
+    onDiagnostic,
+    diagnostics,
+  );
+  const counterAxisSizingMode = toFigmaSizingModeWithDiagnostics(
+    layout.axis === 'horizontal' ? layout.sizing.height : layout.sizing.width,
+    'sizing.height',
+    onDiagnostic,
+    diagnostics,
+  );
+
+  if (layout.alignContent !== 'space-between') {
+    const diagnostic = createDiagnostic(
+      'lossy-target-equivalent',
+      layout,
+      'alignContent',
+      `alignContent "${layout.alignContent}" does not round-trip to a dedicated Figma counterAxisAlignContent mode; using AUTO.`,
+    );
+    diagnostics.push(diagnostic);
+    onDiagnostic(diagnostic);
+  }
+
+  const artifact: GraphicsFigmaAutoLayoutSpec = {
     layoutMode: layout.axis === 'horizontal' ? 'HORIZONTAL' : 'VERTICAL',
     layoutWrap: layout.wraps ? 'WRAP' : 'NO_WRAP',
-    itemSpacing,
-    counterAxisSpacing,
+    itemSpacing: layout.axis === 'horizontal' ? layout.columnGap : layout.rowGap,
+    counterAxisSpacing:
+      layout.wraps === true && layout.axis === 'horizontal'
+        ? layout.rowGap
+        : layout.axis === 'horizontal'
+          ? 0
+          : layout.wraps
+            ? layout.columnGap
+            : 0,
     paddingTop: layout.padding.top,
     paddingRight: layout.padding.right,
     paddingBottom: layout.padding.bottom,
@@ -172,19 +379,78 @@ export function toFigmaAutoLayoutFromGraphicsLayout(
     primaryAxisAlignItems: toFigmaAxisAlign(layout.justifyContent),
     counterAxisAlignItems: toFigmaAxisAlign(layout.alignItems),
     counterAxisAlignContent: layout.alignContent === 'space-between' ? 'SPACE_BETWEEN' : 'AUTO',
-    primaryAxisSizingMode: layout.axis === 'horizontal'
-      ? toFigmaSizingMode(layout.sizing.width)
-      : toFigmaSizingMode(layout.sizing.height),
-    counterAxisSizingMode: layout.axis === 'horizontal'
-      ? toFigmaSizingMode(layout.sizing.height)
-      : toFigmaSizingMode(layout.sizing.width),
+    primaryAxisSizingMode,
+    counterAxisSizingMode,
   };
+
+  return { artifact, diagnostics };
+}
+
+function createDiagnostic(
+  code: GraphicsAdapterDiagnosticCode,
+  layout: GraphicsLayoutSpec,
+  path: string,
+  customMessage?: string,
+): GraphicsAdapterDiagnostic {
+  return {
+    adapter: 'figma',
+    code,
+    path,
+    message:
+      customMessage ??
+      `layout.${path}="${(layout as unknown as Record<string, string>)[path]}" is lossy/unsupported for Figma auto-layout conversion.`,
+  };
+}
+
+function toFigmaSizingModeWithDiagnostics(
+  value: GraphicsSizingMode,
+  path: string,
+  onDiagnostic: (diagnostic: GraphicsAdapterDiagnostic) => void,
+  diagnostics: GraphicsAdapterDiagnostic[],
+): 'FIXED' | 'AUTO' {
+  if (value === 'fill') {
+    const diagnostic = {
+      adapter: 'figma' as const,
+      code: 'unsupported-target-value' as const,
+      path,
+      message:
+        'fill sizing is not supported by Figma auto-layout sizing; using FIXED.',
+    } satisfies GraphicsAdapterDiagnostic;
+    diagnostics.push(diagnostic);
+    onDiagnostic(diagnostic);
+    return 'FIXED';
+  }
+
+  if (value === 'unknown') {
+    const diagnostic = {
+      adapter: 'figma' as const,
+      code: 'unknown-source-value' as const,
+      path,
+      message: 'unknown sizing source value; defaulting to FIXED for safety.',
+    } satisfies GraphicsAdapterDiagnostic;
+    diagnostics.push(diagnostic);
+    onDiagnostic(diagnostic);
+    return 'FIXED';
+  }
+
+  return value === 'hug' ? 'AUTO' : 'FIXED';
+}
+
+function pushDiagnostic(
+  onDiagnostic: GraphicsAdapterConversionOptions['onDiagnostic'],
+  diagnostic: GraphicsAdapterDiagnostic,
+) {
+  if (!onDiagnostic) {
+    return;
+  }
+  onDiagnostic(diagnostic);
 }
 
 export function toFigmaAutoLayoutFromRLSCNode(
   node: RLSCNode,
+  options?: GraphicsAdapterConversionOptions,
 ): GraphicsFigmaAutoLayoutSpec | null {
-  return toFigmaAutoLayoutFromGraphicsLayout(normalizeGraphicsLayoutSpecFromRLSCNode(node));
+  return toFigmaAutoLayoutFromGraphicsLayout(normalizeGraphicsLayoutSpecFromRLSCNode(node), options);
 }
 
 export function isCanonicalStackLayout(layout: GraphicsLayoutSpec | null): layout is GraphicsLayoutSpec & {
@@ -236,8 +502,4 @@ function normalizePositionMode(value: string): GraphicsPositionMode {
   if (value === 'absolute') return 'absolute';
   if (value === 'fixed') return 'fixed';
   return 'auto';
-}
-
-function toFigmaSizingMode(value: GraphicsSizingMode): 'FIXED' | 'AUTO' {
-  return value === 'hug' ? 'AUTO' : 'FIXED';
 }

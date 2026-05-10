@@ -136,10 +136,23 @@ and Photoshop-like layer models should be handled by adapters.
 import {
   normalizeGraphicsLayoutSpecFromRLSCNode,
   toFigmaAutoLayoutFromGraphicsLayout,
+  toFigmaAutoLayoutFromGraphicsLayoutWithDiagnostics,
+  getFigmaCoverage,
+  getGraphicsAdapterCoverage,
+  GraphicsAdapterDiagnostic,
 } from 'rlsc-analysis';
 
 const canonical = normalizeGraphicsLayoutSpecFromRLSCNode(doc.root);
 const figmaLayout = canonical ? toFigmaAutoLayoutFromGraphicsLayout(canonical) : null;
+const figmaWithDiagnostics = canonical
+  ? toFigmaAutoLayoutFromGraphicsLayoutWithDiagnostics(canonical, {
+      onDiagnostic: (diagnostic: GraphicsAdapterDiagnostic) => {
+        console.debug(diagnostic.code, diagnostic.message);
+      },
+    })
+  : null;
+const figmaCoverage = getFigmaCoverage();
+const cssCoverage = getGraphicsAdapterCoverage('css-dom');
 ```
 
 The canonical interface types are:
@@ -152,8 +165,27 @@ The canonical interface types are:
 Mapping policy:
 
 - CSS flex is normalized to canonical `layout.mode: "stack"` instead of keeping CSS-specific naming.
+- Canonical `layout.mode` now also allows `none`, `absolute`, and `group` to represent
+  non-auto-layout intents.
 - Figma auto layout is generated from canonical stack layout through `toFigmaAutoLayoutFromGraphicsLayout()`.
+- For richer consumers, `toFigmaAutoLayoutFromGraphicsLayoutWithDiagnostics()` reports
+  unsupported or lossy field mappings while preserving the same artifact output.
 - Photoshop-style exports should treat stack/grid as higher-level intent and degrade to grouped layers, bounds, transforms, and text layers when native auto layout is unavailable.
+
+Adapter coverage helpers provide source authority and support/degraded/unsupported snapshots:
+
+```ts
+import {
+  getCssDomCoverage,
+  getFigmaCoverage,
+  getGraphicsAdapterCoverages,
+} from 'rlsc-analysis';
+
+const allCoverages = getGraphicsAdapterCoverages();
+const figmaCoverage = getFigmaCoverage();
+const cssCoverage = getCssDomCoverage();
+const byName = getGraphicsAdapterCoverage('figma');
+```
 
 ## Node Index
 

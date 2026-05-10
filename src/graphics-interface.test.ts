@@ -1,10 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import type { FigmaAxisAlign, GraphicsLayoutSpec, RLSCNode, StandardStyleStack } from './index.js';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type {
+  FigmaAxisAlign,
+  GraphicsAdapterDiagnosticCode,
+  GraphicsLayoutSpec,
+  RLSCNode,
+  StandardStyleStack,
+} from './index.js';
 import {
   isCanonicalStackLayout,
   normalizeGraphicsLayoutSpecFromRLSCNode,
   normalizeGraphicsLayoutSpecFromStyleStack,
+  getCssDomCoverage,
+  getFigmaCoverage,
+  getGraphicsAdapterCoverage,
+  getGraphicsAdapterCoverages,
   toFigmaAutoLayoutFromGraphicsLayout,
+  toFigmaAutoLayoutFromGraphicsLayoutWithDiagnostics,
   toFigmaAutoLayoutFromRLSCNode,
   toGraphicsInterfaceNode,
 } from './index.js';
@@ -40,6 +54,45 @@ function baseStyleStack(overrides: Partial<StandardStyleStack> = {}): StandardSt
     padding: { top: 0, right: 0, bottom: 0, left: 0 },
     ...overrides,
   };
+}
+
+const graphicsAdapterCoverageSpecPath = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+  '..',
+  'docs/specs/viz-system/viz-language-system/graphics-interface-adapter-coverage.spec.md',
+);
+
+function readGraphicsAdapterCoverageSpec(): string {
+  return readFileSync(graphicsAdapterCoverageSpecPath, 'utf8');
+}
+
+function parseSpecSourceAuthorityRows(specText: string): Record<
+  string,
+  { primary: string; secondary: string }
+> {
+  const lines = specText.split('\n');
+  const headerIndex = lines.findIndex((line) => line.includes('| Adapter | 1차 기준 | 2차 기준 |'));
+  if (headerIndex < 0) return {};
+
+  const rows: Record<string, { primary: string; secondary: string }> = {};
+  for (let idx = headerIndex + 2; idx < lines.length; idx += 1) {
+    const line = lines[idx];
+    if (!line.startsWith('|')) break;
+    if (!line.includes('`')) continue;
+
+    const cells = line
+      .split('|')
+      .map((cell) => cell.trim())
+      .filter(Boolean);
+    if (cells.length < 4) continue;
+
+    const [rawId, primary, secondary] = cells;
+    const id = rawId.replace(/`/g, '');
+    rows[id] = { primary, secondary };
+  }
+  return rows;
 }
 
 describe('graphics interface normalization', () => {
@@ -328,5 +381,149 @@ describe('graphics interface normalization', () => {
         },
       ],
     });
+  });
+});
+
+describe('graphics interface adapter coverage and diagnostics', () => {
+  it('reads graphics adapter coverage spec and validates figma locators', () => {
+    const spec = readGraphicsAdapterCoverageSpec();
+
+    expect(spec).toContain('AdapterCoverage');
+    expect(spec).toContain('https://developers.figma.com/docs/plugins/api/typings/');
+    expect(spec).toContain('@figma/plugin-typings');
+  });
+
+  it('exports non-empty adapter coverage buckets and aligns source authorities', () => {
+    const specText = readGraphicsAdapterCoverageSpec();
+    const rows = parseSpecSourceAuthorityRows(specText);
+    const coverages = getGraphicsAdapterCoverages();
+    const rowIds = new Set(Object.keys(rows));
+    const ids = new Set(coverages.map((coverage) => coverage.id));
+
+    expect(ids).toEqual(new Set(['css-dom', 'figma', 'pencil', 'photoshop', 'stitch']));
+    for (const id of ids) {
+      expect(rowIds).toContain(id);
+    }
+
+    expect(getCssDomCoverage().id).toBe('css-dom');
+    expect(getFigmaCoverage().id).toBe('figma');
+    expect(getGraphicsAdapterCoverage('figma')?.id).toBe('figma');
+    expect(getGraphicsAdapterCoverage('missing')).toBeUndefined();
+
+    for (const coverage of coverages) {
+      const row = rows[coverage.id];
+      expect(row).toBeDefined();
+      if (!row) continue;
+
+      const rowText = `${row.primary} ${row.secondary}`.toLowerCase().replace(/`/g, '');
+      for (const sourceAuthority of coverage.sourceAuthority) {
+        expect(rowText).toContain(sourceAuthority.name.toLowerCase().replace(/`/g, ''));
+        if (
+          sourceAuthority.locator.startsWith('http')
+          || sourceAuthority.locator.includes('@')
+        ) {
+          expect(specText).toContain(sourceAuthority.locator);
+        }
+      }
+
+      expect(coverage.supported.length).toBeGreaterThan(0);
+      expect(coverage.degraded.length).toBeGreaterThan(0);
+      expect(coverage.unsupported.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('returns null with unsupported diagnostic for absolute and group non-stack modes', () => {
+    const absoluteModeLayout: GraphicsLayoutSpec = {
+      mode: 'absolute',
+      axis: null,
+      wraps: false,
+      gap: 0,
+      rowGap: 0,
+      columnGap: 0,
+      justifyContent: 'start',
+      alignItems: 'stretch',
+      alignContent: 'space-between',
+      padding: { top: 0, right: 0, bottom: 0, left: 0 },
+      position: { mode: 'auto' },
+      sizing: { width: 'fixed', height: 'fixed' },
+    };
+    const groupModeLayout: GraphicsLayoutSpec = {
+      ...absoluteModeLayout,
+      mode: 'group',
+    };
+    const absoluteDiagnostics: GraphicsAdapterDiagnosticCode[] = [];
+    const groupDiagnostics: GraphicsAdapterDiagnosticCode[] = [];
+
+    const absoluteResult = toFigmaAutoLayoutFromGraphicsLayoutWithDiagnostics(absoluteModeLayout, {
+      onDiagnostic: (diagnostic) => absoluteDiagnostics.push(diagnostic.code),
+    });
+    const groupResult = toFigmaAutoLayoutFromGraphicsLayoutWithDiagnostics(groupModeLayout, {
+      onDiagnostic: (diagnostic) => groupDiagnostics.push(diagnostic.code),
+    });
+
+    expect(absoluteResult).toBeNull();
+    expect(groupResult).toBeNull();
+    expect(absoluteDiagnostics).toContain('unsupported-layout-mode');
+    expect(groupDiagnostics).toContain('unsupported-layout-mode');
+    expect(toFigmaAutoLayoutFromGraphicsLayout(absoluteModeLayout)).toBeNull();
+    expect(toFigmaAutoLayoutFromGraphicsLayout(groupModeLayout)).toBeNull();
+  });
+
+  it('maps fill/unknown sizing with specific sizing diagnostics', () => {
+    const fillUnknownSizingLayout: GraphicsLayoutSpec = {
+      mode: 'stack',
+      axis: 'horizontal',
+      wraps: false,
+      gap: 0,
+      rowGap: 0,
+      columnGap: 0,
+      justifyContent: 'start',
+      alignItems: 'stretch',
+      alignContent: 'space-between',
+      padding: { top: 0, right: 0, bottom: 0, left: 0 },
+      position: { mode: 'auto' },
+      sizing: { width: 'fill', height: 'unknown' },
+    };
+
+    const diagnostics: GraphicsAdapterDiagnosticCode[] = [];
+    const result = toFigmaAutoLayoutFromGraphicsLayoutWithDiagnostics(fillUnknownSizingLayout, {
+      onDiagnostic: (diagnostic) => diagnostics.push(diagnostic.code),
+    });
+
+    expect(result?.artifact.primaryAxisSizingMode).toBe('FIXED');
+    expect(result?.artifact.counterAxisSizingMode).toBe('FIXED');
+    expect(diagnostics).toContain('unsupported-target-value');
+    expect(diagnostics).toContain('unknown-source-value');
+    expect(
+      result?.diagnostics.find((entry) => entry.code === 'unsupported-target-value')?.path,
+    ).toBe('sizing.width');
+    expect(result?.diagnostics.find((entry) => entry.code === 'unknown-source-value')?.path).toBe(
+      'sizing.height',
+    );
+  });
+
+  it('emits lossy diagnostic when alignContent fallback is AUTO', () => {
+    const lossyAlignLayout: GraphicsLayoutSpec = {
+      mode: 'stack',
+      axis: 'vertical',
+      wraps: false,
+      gap: 0,
+      rowGap: 0,
+      columnGap: 0,
+      justifyContent: 'start',
+      alignItems: 'center',
+      alignContent: 'start',
+      padding: { top: 0, right: 0, bottom: 0, left: 0 },
+      position: { mode: 'auto' },
+      sizing: { width: 'fixed', height: 'fixed' },
+    };
+
+    const diagnostics: GraphicsAdapterDiagnosticCode[] = [];
+    const result = toFigmaAutoLayoutFromGraphicsLayoutWithDiagnostics(lossyAlignLayout, {
+      onDiagnostic: (diagnostic) => diagnostics.push(diagnostic.code),
+    });
+
+    expect(result?.artifact.counterAxisAlignContent).toBe('AUTO');
+    expect(diagnostics).toContain('lossy-target-equivalent');
   });
 });
