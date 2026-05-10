@@ -124,6 +124,29 @@ Each collected node includes `styleStack`, a compact layout stack intended for F
 
 This stack is intentionally descriptive rather than a full CSS clone. It should be used as the standard bridge between DOM scanning and perspective/Figma-like renderers.
 
+### Canonical Graphics Interface Types
+
+`StandardStyleStack` remains the raw/intermediate DOM-computed style record.
+
+Use the canonical graphics helpers for cross-model normalization:
+
+```ts
+import {
+  normalizeGraphicsLayoutSpecFromRLSCNode,
+  toFigmaAutoLayoutFromGraphicsLayout,
+} from 'rlsc-analysis';
+
+const canonical = normalizeGraphicsLayoutSpecFromRLSCNode(doc.root);
+const figmaLayout = canonical ? toFigmaAutoLayoutFromGraphicsLayout(canonical) : null;
+```
+
+The canonical interface types are:
+
+- `GraphicsInterfaceNode`
+- `GraphicsGeometrySpec`
+- `GraphicsLayoutSpec`
+- `GraphicsFigmaAutoLayoutSpec`
+
 ## Node Index
 
 Use `createNodeIndex(doc)` when a document was collected elsewhere and only lookup helpers are needed.

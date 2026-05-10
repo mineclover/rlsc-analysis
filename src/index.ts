@@ -960,3 +960,5 @@ function syntheticRoot(
     children: nodes,
   };
 }
+
+export * from './graphics-interface.js';
