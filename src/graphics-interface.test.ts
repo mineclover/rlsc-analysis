@@ -44,7 +44,7 @@ describe('graphics interface normalization', () => {
     const layout = normalizeGraphicsLayoutSpecFromRLSCNode(rowNode);
     const figmaLayout = toFigmaAutoLayoutFromGraphicsLayout(layout);
     const expectedLayout: GraphicsLayoutSpec = {
-      mode: 'flex',
+      mode: 'stack',
       axis: 'horizontal',
       wraps: false,
       gap: 16,
@@ -53,15 +53,26 @@ describe('graphics interface normalization', () => {
       justifyContent: 'start',
       alignItems: 'center',
       alignContent: 'stretch',
+      padding: { top: 0, right: 0, bottom: 0, left: 0 },
+      position: { mode: 'auto' },
+      sizing: { width: 'unknown', height: 'unknown' },
     };
 
     expect(layout).toEqual(expectedLayout);
     expect(figmaLayout).toEqual({
       layoutMode: 'HORIZONTAL',
+      layoutWrap: 'NO_WRAP',
       itemSpacing: 16,
       counterAxisSpacing: 0,
+      paddingTop: 0,
+      paddingRight: 0,
+      paddingBottom: 0,
+      paddingLeft: 0,
       primaryAxisAlignItems: 'MIN',
       counterAxisAlignItems: 'CENTER',
+      counterAxisAlignContent: 'AUTO',
+      primaryAxisSizingMode: 'FIXED',
+      counterAxisSizingMode: 'FIXED',
     });
   });
 
@@ -88,7 +99,7 @@ describe('graphics interface normalization', () => {
     const figmaLayout = toFigmaAutoLayoutFromGraphicsLayout(layout);
 
     expect(layout).toEqual({
-      mode: 'flex',
+      mode: 'stack',
       axis: 'vertical',
       wraps: true,
       gap: 8,
@@ -97,18 +108,37 @@ describe('graphics interface normalization', () => {
       justifyContent: 'space-between',
       alignItems: 'end',
       alignContent: 'space-around',
+      padding: { top: 0, right: 0, bottom: 0, left: 0 },
+      position: { mode: 'auto' },
+      sizing: { width: 'unknown', height: 'unknown' },
     });
     expect(figmaLayout).toEqual({
       layoutMode: 'VERTICAL',
+      layoutWrap: 'WRAP',
       itemSpacing: 12,
       counterAxisSpacing: 24,
+      paddingTop: 0,
+      paddingRight: 0,
+      paddingBottom: 0,
+      paddingLeft: 0,
       primaryAxisAlignItems: 'SPACE_BETWEEN',
       counterAxisAlignItems: 'MAX',
+      counterAxisAlignContent: 'AUTO',
+      primaryAxisSizingMode: 'FIXED',
+      counterAxisSizingMode: 'FIXED',
     } satisfies { layoutMode: 'HORIZONTAL' | 'VERTICAL' } & {
+      layoutWrap: 'NO_WRAP' | 'WRAP';
       itemSpacing: number;
       counterAxisSpacing: number;
+      paddingTop: number;
+      paddingRight: number;
+      paddingBottom: number;
+      paddingLeft: number;
       primaryAxisAlignItems: FigmaAxisAlign;
       counterAxisAlignItems: FigmaAxisAlign;
+      counterAxisAlignContent: 'AUTO' | 'SPACE_BETWEEN';
+      primaryAxisSizingMode: 'FIXED' | 'AUTO';
+      counterAxisSizingMode: 'FIXED' | 'AUTO';
     });
   });
 
@@ -133,7 +163,7 @@ describe('graphics interface normalization', () => {
     const figmaLayout = toFigmaAutoLayoutFromGraphicsLayout(layout);
 
     expect(layout).toEqual({
-      mode: 'flex',
+      mode: 'stack',
       axis: 'horizontal',
       wraps: true,
       gap: 0,
@@ -142,13 +172,24 @@ describe('graphics interface normalization', () => {
       justifyContent: 'space-around',
       alignItems: 'stretch',
       alignContent: 'end',
+      padding: { top: 0, right: 0, bottom: 0, left: 0 },
+      position: { mode: 'auto' },
+      sizing: { width: 'unknown', height: 'unknown' },
     });
     expect(figmaLayout).toEqual({
       layoutMode: 'HORIZONTAL',
+      layoutWrap: 'WRAP',
       itemSpacing: 0,
       counterAxisSpacing: 18,
+      paddingTop: 0,
+      paddingRight: 0,
+      paddingBottom: 0,
+      paddingLeft: 0,
       primaryAxisAlignItems: 'SPACE_BETWEEN',
       counterAxisAlignItems: 'MIN',
+      counterAxisAlignContent: 'AUTO',
+      primaryAxisSizingMode: 'FIXED',
+      counterAxisSizingMode: 'FIXED',
     });
   });
 });

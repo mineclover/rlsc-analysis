@@ -128,7 +128,9 @@ This stack is intentionally descriptive rather than a full CSS clone. It should 
 
 `StandardStyleStack` remains the raw/intermediate DOM-computed style record.
 
-Use the canonical graphics helpers for cross-model normalization:
+Use the canonical graphics helpers for cross-model normalization. The canonical layer uses
+tool-neutral names such as `stack`, `grid`, `geometry`, `padding`, and `sizing`; CSS, Figma,
+and Photoshop-like layer models should be handled by adapters.
 
 ```ts
 import {
@@ -146,6 +148,12 @@ The canonical interface types are:
 - `GraphicsGeometrySpec`
 - `GraphicsLayoutSpec`
 - `GraphicsFigmaAutoLayoutSpec`
+
+Mapping policy:
+
+- CSS flex is normalized to canonical `layout.mode: "stack"` instead of keeping CSS-specific naming.
+- Figma auto layout is generated from canonical stack layout through `toFigmaAutoLayoutFromGraphicsLayout()`.
+- Photoshop-style exports should treat stack/grid as higher-level intent and degrade to grouped layers, bounds, transforms, and text layers when native auto layout is unavailable.
 
 ## Node Index
 

@@ -2,8 +2,17 @@
 import type { FigmaLayoutMode, RLSCNode, StandardStyleStack } from './index.js';
 
 export type GraphicsAxis = 'horizontal' | 'vertical';
-export type GraphicsLayoutMode = 'none' | 'flex' | 'grid';
-export type GraphicsAxisAlign = 'start' | 'center' | 'end' | 'stretch' | 'space-between' | 'space-around' | 'space-evenly';
+export type GraphicsLayoutMode = 'none' | 'stack' | 'grid';
+export type GraphicsAxisAlign =
+  | 'start'
+  | 'center'
+  | 'end'
+  | 'stretch'
+  | 'space-between'
+  | 'space-around'
+  | 'space-evenly';
+export type GraphicsPositionMode = 'auto' | 'absolute' | 'fixed';
+export type GraphicsSizingMode = 'fixed' | 'hug' | 'fill' | 'unknown';
 
 export interface GraphicsGeometrySpec {
   readonly x: number;
@@ -22,6 +31,19 @@ export interface GraphicsLayoutSpec {
   readonly justifyContent: GraphicsAxisAlign;
   readonly alignItems: GraphicsAxisAlign;
   readonly alignContent: GraphicsAxisAlign;
+  readonly padding: {
+    readonly top: number;
+    readonly right: number;
+    readonly bottom: number;
+    readonly left: number;
+  };
+  readonly position: {
+    readonly mode: GraphicsPositionMode;
+  };
+  readonly sizing: {
+    readonly width: GraphicsSizingMode;
+    readonly height: GraphicsSizingMode;
+  };
 }
 
 export interface GraphicsInterfaceNode {
@@ -41,10 +63,18 @@ export type FigmaAxisAlign =
 
 export interface GraphicsFigmaAutoLayoutSpec {
   readonly layoutMode: 'HORIZONTAL' | 'VERTICAL';
+  readonly layoutWrap: 'NO_WRAP' | 'WRAP';
   readonly itemSpacing: number;
   readonly counterAxisSpacing: number;
+  readonly paddingTop: number;
+  readonly paddingRight: number;
+  readonly paddingBottom: number;
+  readonly paddingLeft: number;
   readonly primaryAxisAlignItems: FigmaAxisAlign;
   readonly counterAxisAlignItems: FigmaAxisAlign;
+  readonly counterAxisAlignContent: 'AUTO' | 'SPACE_BETWEEN';
+  readonly primaryAxisSizingMode: 'FIXED' | 'AUTO';
+  readonly counterAxisSizingMode: 'FIXED' | 'AUTO';
 }
 
 export function normalizeGraphicsLayoutSpecFromStyleStack(
@@ -64,13 +94,16 @@ export function normalizeGraphicsLayoutSpecFromStyleStack(
       justifyContent: 'start',
       alignItems: 'stretch',
       alignContent: 'stretch',
+      padding: styleStack.padding,
+      position: { mode: normalizePositionMode(styleStack.position) },
+      sizing: { width: 'unknown', height: 'unknown' },
     };
   }
 
   if (styleStack.autoLayout) {
     const fallbackGap = styleStack.autoLayout.gap ?? 0;
     return {
-      mode: 'flex',
+      mode: 'stack',
       axis: convertFigmaLayoutAxis(styleStack.figma.layoutMode),
       wraps: styleStack.autoLayout.wrap,
       gap: fallbackGap,
@@ -79,6 +112,9 @@ export function normalizeGraphicsLayoutSpecFromStyleStack(
       justifyContent: normalizeAxisAlign(styleStack.autoLayout.justifyContent),
       alignItems: normalizeAxisAlign(styleStack.autoLayout.alignItems),
       alignContent: normalizeAxisAlign(styleStack.autoLayout.alignContent),
+      padding: styleStack.padding,
+      position: { mode: normalizePositionMode(styleStack.position) },
+      sizing: { width: 'unknown', height: 'unknown' },
     };
   }
 
@@ -112,18 +148,36 @@ export function toGraphicsInterfaceNode(node: RLSCNode): GraphicsInterfaceNode {
 export function toFigmaAutoLayoutFromGraphicsLayout(
   layout: GraphicsLayoutSpec | null,
 ): GraphicsFigmaAutoLayoutSpec | null {
-  if (!layout || layout.mode !== 'flex' || layout.axis === null) return null;
+  if (!layout || layout.mode !== 'stack' || layout.axis === null) return null;
 
   const itemSpacing = layout.axis === 'horizontal' ? layout.columnGap : layout.rowGap;
   const counterAxisSpacing =
-    layout.wraps === true && layout.axis === 'horizontal' ? layout.rowGap : layout.axis === 'horizontal' ? 0 : layout.wraps ? layout.columnGap : 0;
+    layout.wraps === true && layout.axis === 'horizontal'
+      ? layout.rowGap
+      : layout.axis === 'horizontal'
+        ? 0
+        : layout.wraps
+          ? layout.columnGap
+          : 0;
 
   return {
     layoutMode: layout.axis === 'horizontal' ? 'HORIZONTAL' : 'VERTICAL',
+    layoutWrap: layout.wraps ? 'WRAP' : 'NO_WRAP',
     itemSpacing,
     counterAxisSpacing,
+    paddingTop: layout.padding.top,
+    paddingRight: layout.padding.right,
+    paddingBottom: layout.padding.bottom,
+    paddingLeft: layout.padding.left,
     primaryAxisAlignItems: toFigmaAxisAlign(layout.justifyContent),
     counterAxisAlignItems: toFigmaAxisAlign(layout.alignItems),
+    counterAxisAlignContent: layout.alignContent === 'space-between' ? 'SPACE_BETWEEN' : 'AUTO',
+    primaryAxisSizingMode: layout.axis === 'horizontal'
+      ? toFigmaSizingMode(layout.sizing.width)
+      : toFigmaSizingMode(layout.sizing.height),
+    counterAxisSizingMode: layout.axis === 'horizontal'
+      ? toFigmaSizingMode(layout.sizing.height)
+      : toFigmaSizingMode(layout.sizing.width),
   };
 }
 
@@ -133,12 +187,14 @@ export function toFigmaAutoLayoutFromRLSCNode(
   return toFigmaAutoLayoutFromGraphicsLayout(normalizeGraphicsLayoutSpecFromRLSCNode(node));
 }
 
-export function isCanonicalFlexLayout(layout: GraphicsLayoutSpec | null): layout is GraphicsLayoutSpec & {
-  mode: 'flex';
+export function isCanonicalStackLayout(layout: GraphicsLayoutSpec | null): layout is GraphicsLayoutSpec & {
+  mode: 'stack';
   axis: GraphicsAxis;
 } {
-  return !!layout && layout.mode === 'flex' && layout.axis !== null;
+  return !!layout && layout.mode === 'stack' && layout.axis !== null;
 }
+
+export const isCanonicalFlexLayout = isCanonicalStackLayout;
 
 function toFigmaAxisAlign(align: GraphicsAxisAlign): FigmaAxisAlign {
   if (align === 'center') return 'CENTER';
@@ -174,4 +230,14 @@ function normalizeAxisAlign(value: string): GraphicsAxisAlign {
 
 function convertFigmaLayoutAxis(layoutMode: FigmaLayoutMode): GraphicsAxis {
   return layoutMode === 'HORIZONTAL' ? 'horizontal' : 'vertical';
+}
+
+function normalizePositionMode(value: string): GraphicsPositionMode {
+  if (value === 'absolute') return 'absolute';
+  if (value === 'fixed') return 'fixed';
+  return 'auto';
+}
+
+function toFigmaSizingMode(value: GraphicsSizingMode): 'FIXED' | 'AUTO' {
+  return value === 'hug' ? 'AUTO' : 'FIXED';
 }
