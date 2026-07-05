@@ -23,10 +23,10 @@
     }
   },
   "scripts": {
-    "accuracy:browser": "pnpm --dir ../.. --filter rlsc-analysis build && pnpm --dir ../.. --filter rlsc-perspective build && pnpm --dir ../.. --filter @qa-sdk/e2e exec node ../../packages/rlsc-analysis/smoke/accuracy.mjs",
+    "accuracy:browser": "corepack pnpm --dir ../.. --filter rlsc-analysis build && corepack pnpm --dir ../.. --filter rlsc-perspective build && corepack pnpm --dir ../.. --filter @qa-sdk/e2e exec node ../../packages/rlsc-analysis/smoke/accuracy.mjs",
     "build": "tsup",
     "dev": "tsup --watch",
-    "prepare": "pnpm build",
+    "prepare": "tsup",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
