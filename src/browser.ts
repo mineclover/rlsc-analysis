@@ -351,7 +351,10 @@ export function createLayoutMonitor(root?: Element, options: MonitorOptions = {}
   let current = collectLayout(target, options.collectOptions);
   let mutationObserver: MutationObserver | null = null;
   let resizeObserver: ResizeObserver | null = null;
-  let timer: ReturnType<typeof setTimeout> | null = null;
+  // This module is browser-only: window.setTimeout returns a numeric handle.
+  // Using the unqualified setTimeout lets Node's ambient types widen the
+  // handle to NodeJS.Timeout during package prepare/type declaration builds.
+  let timer: number | null = null;
 
   function collectNext(): void {
     if (timer) window.clearTimeout(timer);
