@@ -4,11 +4,13 @@ import {
   analyzeTextOccupancy,
   createNodeIndex,
   detectAreaOverflow,
+  formatRLSCSnapshot,
   findNodeByXPath,
   getFigmaCoverage,
   getGraphicsAdapterCoverage,
   getGraphicsAdapterCoverages,
   toFigmaAutoLayoutFromGraphicsLayout,
+  summarizeRLSCDocument,
 } from './index.js';
 import type { AreaOverflowIssue, RLSCDocument, RLSCNode } from './index.js';
 
@@ -130,6 +132,76 @@ describe('debug issue analysis', () => {
     expect(index.findByQaAddress('card:title')).toHaveLength(1);
     expect(findNodeByXPath(doc, '/main[1]/h2[1]')?.identifier.value).toBe('Card.Title');
     expect(analyzeAreas(doc).index.findById('child')?.identifier.xpath).toBe('/main[1]/h2[1]');
+  });
+});
+
+describe('snapshot readability helpers', () => {
+  it('summarizes a document without losing relation-type counts', () => {
+    const child = node({
+      id: 'child',
+      tag: 'button',
+      rect: { x: 10, y: 12, width: 40, height: 20 },
+      debugLabel: 'Submit order',
+      address: 'checkout:submit',
+    });
+    const doc = documentWithRoot(
+      node({
+        id: 'root',
+        tag: 'main',
+        rect: { x: 0, y: 0, width: 100, height: 100 },
+        children: [child],
+      }),
+    );
+    const summary = summarizeRLSCDocument(doc);
+
+    expect(summary.nodeCount).toBe(2);
+    expect(summary.visibleNodeCount).toBe(2);
+    expect(summary.relationCount).toBe(0);
+    expect(summary.relationsByType.contains).toBe(0);
+    expect(summary.root).toEqual({ id: 'root', tag: 'main' });
+  });
+
+  it('formats a compact tree with readable identifiers and bounded output', () => {
+    const child = node({
+      id: 'child',
+      tag: 'button',
+      classes: ['primary'],
+      rect: { x: 10, y: 12, width: 40, height: 20 },
+      debugLabel: 'Submit order',
+      attributes: { 'data-qa-address': 'checkout:submit', type: 'submit' },
+      textContent: 'Submit',
+      identifier: {
+        kind: 'qaAddress',
+        value: 'checkout:submit',
+        qaAddress: 'checkout:submit',
+        nodeId: 'child',
+      },
+    });
+    const doc = documentWithRoot(
+      node({
+        id: 'root',
+        tag: 'main',
+        rect: { x: 0, y: 0, width: 100, height: 100 },
+        children: [child],
+      }),
+    );
+
+    const output = formatRLSCSnapshot(doc, {
+      maxDepth: 0,
+      maxNodes: 1,
+      includeLayers: false,
+      includeRelations: false,
+      includeAttributes: true,
+    });
+
+    expect(output).toContain('RLSC snapshot v1.0');
+    expect(output).toContain('viewport 200×120');
+    expect(output).toContain('- main @0,0 100×100 id=root');
+    expect(output).toContain('… 1 node omitted');
+    expect(output).not.toContain('data-qa-address=');
+    expect(formatRLSCSnapshot(doc, { includeAttributes: true })).toContain(
+      'data-qa-address="checkout:submit"',
+    );
   });
 });
 

@@ -63,6 +63,32 @@ const result = scanScreen(document.body, {
 const node = result.byXPath('/body[1]/main[1]/button[1]');
 ```
 
+### Readable snapshot output
+
+`scanScreen().doc` is the lossless `RLSCDocument` contract. It is appropriate for
+JSON exchange, but printing it directly includes the full grid, relation list,
+computed style stack, and nested children. For a review, terminal, or demo
+panel, use the bounded text projection instead:
+
+```ts
+import { formatRLSCSnapshot } from 'rlsc-analysis';
+import { scanScreen } from 'rlsc-analysis/browser';
+
+const scan = scanScreen(document.body, { includeText: true });
+console.log(formatRLSCSnapshot(scan.doc, {
+  maxDepth: 5,
+  maxNodes: 120,
+  maxRelations: 24,
+}));
+```
+
+The output starts with viewport/node/layer/relation counts, then prints an
+indented element tree with geometry and stable identifiers (`componentId`,
+`qaAddress`, or `debugLabel`). Layer and relation sections follow with bounded
+row counts. `summarizeRLSCDocument(doc)` exposes the same counters as a JSON
+object when a UI wants to render its own summary. Use `JSON.stringify(doc,
+null, 2)` when a lossless machine-readable artifact is required.
+
 Keep pure analysis imports separate from browser collection imports when building non-browser tooling.
 
 `scanScreen()` is the recommended browser-facing entrypoint when the caller wants a complete snapshot:

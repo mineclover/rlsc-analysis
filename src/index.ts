@@ -127,6 +127,17 @@ export type RelationType =
   | 'stacked'
   | 'flow';
 
+const RELATION_TYPES: readonly RelationType[] = [
+  'contains',
+  'overlaps',
+  'adjacent-x',
+  'adjacent-y',
+  'aligned-x',
+  'aligned-y',
+  'stacked',
+  'flow',
+];
+
 export interface RLSCRelation {
   readonly type: RelationType;
   readonly source: string;
@@ -144,6 +155,45 @@ export interface RLSCDocument {
   readonly grid: LayoutGrid;
   readonly layers: readonly LayerStack[];
   readonly relations: readonly RLSCRelation[];
+}
+
+/**
+ * Stable, low-noise counters for a collected screen document.
+ *
+ * `RLSCDocument` is intentionally lossless and therefore fairly verbose when
+ * printed as JSON. Consumers that need a console/debug view can use this
+ * summary without walking the tree themselves.
+ */
+export interface RLSCSnapshotSummary {
+  readonly version: RLSCDocument['version'];
+  readonly viewport: RLSCDocument['viewport'];
+  readonly url: string;
+  readonly timestamp: string;
+  readonly nodeCount: number;
+  readonly visibleNodeCount: number;
+  readonly layerCount: number;
+  readonly relationCount: number;
+  readonly relationsByType: Readonly<Record<RelationType, number>>;
+  readonly root: {
+    readonly id: string;
+    readonly tag: string;
+    readonly label?: string;
+  };
+}
+
+export interface RLSCSnapshotFormatOptions {
+  /** Maximum tree depth to print. Defaults to 8. */
+  readonly maxDepth?: number;
+  /** Maximum number of tree nodes to print. Defaults to 200. */
+  readonly maxNodes?: number;
+  /** Maximum relation rows to print. Defaults to 40. */
+  readonly maxRelations?: number;
+  /** Include layer rows after the tree. Defaults to true. */
+  readonly includeLayers?: boolean;
+  /** Include relation rows after the tree. Defaults to true. */
+  readonly includeRelations?: boolean;
+  /** Include the captured data-* and aria-* attributes on each node. */
+  readonly includeAttributes?: boolean;
 }
 
 export interface ProximityGroup {
@@ -374,6 +424,141 @@ export function createAreaDocument(input: AreaDocumentInput): RLSCDocument {
     layers: classifyLayers(nodes),
     relations: detectRelations(nodes),
   };
+}
+
+/**
+ * Return the stable counters that are useful when reviewing a snapshot.
+ * The document itself is not mutated and relation counts are deterministic.
+ */
+export function summarizeRLSCDocument(doc: RLSCDocument): RLSCSnapshotSummary {
+  const nodes = flattenTree(doc.root);
+  const relationsByType = Object.fromEntries(
+    RELATION_TYPES.map((type) => [type, 0]),
+  ) as Record<RelationType, number>;
+  for (const relation of doc.relations) relationsByType[relation.type] += 1;
+  return {
+    version: doc.version,
+    viewport: doc.viewport,
+    url: doc.url,
+    timestamp: doc.timestamp,
+    nodeCount: nodes.length,
+    visibleNodeCount: nodes.filter((node) => node.visible).length,
+    layerCount: doc.layers.length,
+    relationCount: doc.relations.length,
+    relationsByType,
+    root: {
+      id: doc.root.id,
+      tag: doc.root.tag,
+      ...(nodeLabel(doc.root) ? { label: nodeLabel(doc.root) } : {}),
+    },
+  };
+}
+
+/**
+ * Format a screen document as a compact tree that is suitable for a terminal,
+ * demo panel, or bug report. Use `JSON.stringify(doc, null, 2)` when a lossless
+ * machine-readable artifact is required.
+ */
+export function formatRLSCSnapshot(
+  doc: RLSCDocument,
+  options: RLSCSnapshotFormatOptions = {},
+): string {
+  const maxDepth = Math.max(0, options.maxDepth ?? 8);
+  const maxNodes = Math.max(1, options.maxNodes ?? 200);
+  const maxRelations = Math.max(0, options.maxRelations ?? 40);
+  const summary = summarizeRLSCDocument(doc);
+  const lines = [
+    `RLSC snapshot v${summary.version}`,
+    `viewport ${summary.viewport.width}×${summary.viewport.height} · nodes ${summary.nodeCount} (${summary.visibleNodeCount} visible) · layers ${summary.layerCount} · relations ${summary.relationCount}`,
+    `url ${summary.url}`,
+    `captured ${summary.timestamp}`,
+    '',
+    'tree:',
+  ];
+  const nodes = flattenTree(doc.root);
+  let printedNodes = 0;
+  let omittedNodes = 0;
+  const treeLines: string[] = [];
+
+  function visit(node: RLSCNode, depth: number): void {
+    if (printedNodes >= maxNodes || depth > maxDepth) {
+      omittedNodes += 1;
+      return;
+    }
+    printedNodes += 1;
+    treeLines.push(`${'  '.repeat(depth)}- ${formatSnapshotNode(node, options)}`);
+    for (const child of node.children) visit(child, depth + 1);
+  }
+  visit(doc.root, 0);
+  lines.push(...treeLines);
+  const depthOmitted = nodes.length - printedNodes - omittedNodes;
+  const omitted = omittedNodes + Math.max(0, depthOmitted);
+  if (omitted > 0) lines.push(`  … ${omitted} node${omitted === 1 ? '' : 's'} omitted`);
+
+  if (options.includeLayers !== false) {
+    lines.push('', 'layers:');
+    if (doc.layers.length === 0) lines.push('  (none)');
+    for (const layer of doc.layers) {
+      lines.push(
+        `  - z=${layer.zIndex} ${layer.role} · ${layer.nodeIds.length} nodes · area ${roundForDisplay(layer.totalArea)}px²`,
+      );
+    }
+  }
+
+  if (options.includeRelations !== false) {
+    lines.push('', 'relations:');
+    if (doc.relations.length === 0) lines.push('  (none)');
+    for (const relation of doc.relations.slice(0, maxRelations)) {
+      const strength = relation.strength === undefined ? '' : ` (${relation.strength})`;
+      lines.push(`  - ${relation.source} ${relation.type} ${relation.target}${strength}`);
+    }
+    if (doc.relations.length > maxRelations) {
+      lines.push(`  … ${doc.relations.length - maxRelations} relation rows omitted`);
+    }
+  }
+  return lines.join('\n');
+}
+
+function nodeLabel(node: RLSCNode): string | undefined {
+  return node.debugLabel ?? node.identifier?.componentId ?? node.identifier?.qaAddress;
+}
+
+function formatSnapshotNode(
+  node: RLSCNode,
+  options: RLSCSnapshotFormatOptions,
+): string {
+  const tag = `${node.tag}${node.classes.length > 0 ? `.${node.classes.join('.')}` : ''}`;
+  const rect = `@${roundForDisplay(node.rect.x)},${roundForDisplay(node.rect.y)} ${roundForDisplay(node.rect.width)}×${roundForDisplay(node.rect.height)}`;
+  const tokens = [tag, rect, `id=${node.id}`];
+  if (!node.visible) tokens.push('hidden');
+  if (node.role) tokens.push(`role=${node.role}`);
+  if (node.identifier?.componentId) tokens.push(`component=${node.identifier.componentId}`);
+  if (node.identifier?.qaAddress) tokens.push(`qa=${node.identifier.qaAddress}`);
+  if (node.debugLabel) tokens.push(`label="${compactText(node.debugLabel, 48)}"`);
+  if (node.boundary) tokens.push(`boundary=${node.boundary}`);
+  if (node.position !== 'static') tokens.push(`position=${node.position}`);
+  if (node.zIndex !== 0) tokens.push(`z=${node.zIndex}`);
+  if (node.textContent) tokens.push(`text="${compactText(node.textContent, 64)}"`);
+  if (options.includeAttributes) {
+    for (const [name, value] of Object.entries(node.attributes).toSorted(([a], [b]) =>
+      a.localeCompare(b),
+    )) {
+      tokens.push(`${name}="${compactText(value, 48)}"`);
+    }
+  }
+  return tokens.join(' ');
+}
+
+function compactText(value: string, maxLength: number): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  return normalized.length <= maxLength
+    ? normalized
+    : `${normalized.slice(0, Math.max(0, maxLength - 1))}…`;
+}
+
+function roundForDisplay(value: number): string {
+  const rounded = Math.round(value * 100) / 100;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2).replace(/0+$/, '');
 }
 
 export function analyzeAreas(
