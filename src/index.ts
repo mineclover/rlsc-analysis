@@ -520,7 +520,7 @@ export function formatRLSCSnapshot(
 }
 
 function nodeLabel(node: RLSCNode): string | undefined {
-  return node.debugLabel ?? node.identifier?.componentId ?? node.identifier?.qaAddress;
+  return node.debugLabel ?? node.identifier?.componentId ?? node.identifier?.qaAddress ?? node.address;
 }
 
 function formatSnapshotNode(
@@ -533,7 +533,8 @@ function formatSnapshotNode(
   if (!node.visible) tokens.push('hidden');
   if (node.role) tokens.push(`role=${node.role}`);
   if (node.identifier?.componentId) tokens.push(`component=${node.identifier.componentId}`);
-  if (node.identifier?.qaAddress) tokens.push(`qa=${node.identifier.qaAddress}`);
+  const qaAddress = node.identifier?.qaAddress ?? node.address;
+  if (qaAddress) tokens.push(`qa=${qaAddress}`);
   if (node.debugLabel) tokens.push(`label="${compactText(node.debugLabel, 48)}"`);
   if (node.boundary) tokens.push(`boundary=${node.boundary}`);
   if (node.position !== 'static') tokens.push(`position=${node.position}`);
