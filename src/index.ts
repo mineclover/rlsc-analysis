@@ -194,6 +194,31 @@ export interface RLSCSnapshotFormatOptions {
   readonly includeRelations?: boolean;
   /** Include the captured data-* and aria-* attributes on each node. */
   readonly includeAttributes?: boolean;
+  /** Include compact layout metrics and overflow diagnostics. Defaults to false. */
+  readonly includeAnalysis?: boolean;
+  /** Maximum overflow issue rows to print when analysis is enabled. Defaults to 12. */
+  readonly maxIssues?: number;
+}
+
+/**
+ * Compact, review-oriented analysis values for a collected screen document.
+ *
+ * This intentionally omits the full metrics/pattern objects (which can contain
+ * proximity groups and aspect-ratio distributions). Consumers that need the
+ * complete result should call `analyzeAreas(doc)` directly.
+ */
+export interface RLSCSnapshotAnalysisSummary {
+  readonly dominantFlow: LayoutMetrics['dominantFlow'];
+  readonly flowDirection?: LayoutPattern['flowDirection'];
+  readonly gridPattern: LayoutPattern['gridPattern'] | null;
+  readonly balance: LayoutMetrics['balance'];
+  readonly spacingBase: number | null;
+  readonly spacingValues: readonly number[];
+  readonly goldenRatioScore: number;
+  readonly textDensity?: number;
+  readonly textOverflowCount?: number;
+  readonly overflowIssueCount: number;
+  readonly maxOverflowPx: number;
 }
 
 export interface ProximityGroup {
@@ -455,6 +480,36 @@ export function summarizeRLSCDocument(doc: RLSCDocument): RLSCSnapshotSummary {
 }
 
 /**
+ * Return compact layout metrics and issue counts for a review surface.
+ *
+ * Text occupancy metrics are omitted when the document was collected without
+ * text measurement. This keeps the result honest instead of presenting zero
+ * as a measured value.
+ */
+export function summarizeRLSCAnalysis(doc: RLSCDocument): RLSCSnapshotAnalysisSummary {
+  const analysis = analyzeAreas(doc);
+  const { metrics, pattern, overflowIssues } = analysis;
+  return {
+    dominantFlow: metrics.dominantFlow,
+    ...(pattern.flowDirection ? { flowDirection: pattern.flowDirection } : {}),
+    gridPattern: pattern.gridPattern ?? null,
+    balance: metrics.balance,
+    spacingBase: metrics.spacingBase,
+    spacingValues: metrics.spacingValues,
+    goldenRatioScore: metrics.goldenRatioScore,
+    ...(metrics.textDensity === undefined ? {} : { textDensity: metrics.textDensity }),
+    ...(metrics.textOverflowCount === undefined
+      ? {}
+      : { textOverflowCount: metrics.textOverflowCount }),
+    overflowIssueCount: overflowIssues.length,
+    maxOverflowPx: overflowIssues.reduce(
+      (max, issue) => Math.max(max, issue.exceededPx),
+      0,
+    ),
+  };
+}
+
+/**
  * Format a screen document as a compact tree that is suitable for a terminal,
  * demo panel, or bug report. Use `JSON.stringify(doc, null, 2)` when a lossless
  * machine-readable artifact is required.
@@ -466,6 +521,7 @@ export function formatRLSCSnapshot(
   const maxDepth = Math.max(0, options.maxDepth ?? 8);
   const maxNodes = Math.max(1, options.maxNodes ?? 200);
   const maxRelations = Math.max(0, options.maxRelations ?? 40);
+  const maxIssues = Math.max(0, options.maxIssues ?? 12);
   const summary = summarizeRLSCDocument(doc);
   const lines = [
     `RLSC snapshot v${summary.version}`,
@@ -516,7 +572,57 @@ export function formatRLSCSnapshot(
       lines.push(`  … ${doc.relations.length - maxRelations} relation rows omitted`);
     }
   }
+
+  if (options.includeAnalysis) {
+    const analysis = analyzeAreas(doc);
+    const { metrics, pattern, overflowIssues } = analysis;
+    lines.push('', 'analysis:');
+    lines.push(
+      `  - flow=${metrics.dominantFlow}${pattern.flowDirection ? ` (${pattern.flowDirection})` : ''} · balance x=${roundForDisplay(metrics.balance.x)} y=${roundForDisplay(metrics.balance.y)}`,
+    );
+    lines.push(
+      `  - grid=${formatGridPattern(pattern.gridPattern)} · spacing base=${formatOptionalNumber(metrics.spacingBase)} · values=${formatNumberList(metrics.spacingValues)}`,
+    );
+    lines.push(`  - golden-ratio score=${roundForDisplay(metrics.goldenRatioScore)}`);
+    if (metrics.textDensity !== undefined || metrics.textOverflowCount !== undefined) {
+      lines.push(
+        `  - text density=${formatOptionalNumber(metrics.textDensity)} · overflow=${metrics.textOverflowCount ?? 0}`,
+      );
+    }
+    const maxOverflowPx = overflowIssues.reduce(
+      (max, issue) => Math.max(max, issue.exceededPx),
+      0,
+    );
+    lines.push(
+      `  - area overflow=${overflowIssues.length} issue${overflowIssues.length === 1 ? '' : 's'}${maxOverflowPx > 0 ? ` · max ${roundForDisplay(maxOverflowPx)}px` : ''}`,
+    );
+    for (const issue of overflowIssues.slice(0, maxIssues)) {
+      lines.push(
+        `    - ${issue.parentId} → ${issue.childId} · ${roundForDisplay(issue.exceededPx)}px (top ${roundForDisplay(issue.overflow.top)}, right ${roundForDisplay(issue.overflow.right)}, bottom ${roundForDisplay(issue.overflow.bottom)}, left ${roundForDisplay(issue.overflow.left)})`,
+      );
+    }
+    if (overflowIssues.length > maxIssues) {
+      const omittedIssues = overflowIssues.length - maxIssues;
+      lines.push(
+        `    … ${omittedIssues} issue row${omittedIssues === 1 ? '' : 's'} omitted`,
+      );
+    }
+  }
   return lines.join('\n');
+}
+
+function formatGridPattern(pattern: LayoutPattern['gridPattern']): string {
+  if (!pattern) return 'none';
+  if (typeof pattern === 'string') return pattern;
+  return `${pattern.cols}×${pattern.rows}`;
+}
+
+function formatOptionalNumber(value: number | null | undefined): string {
+  return value === null || value === undefined ? 'n/a' : roundForDisplay(value);
+}
+
+function formatNumberList(values: readonly number[]): string {
+  return values.length === 0 ? 'none' : `[${values.map(roundForDisplay).join(', ')}]`;
 }
 
 function nodeLabel(node: RLSCNode): string | undefined {

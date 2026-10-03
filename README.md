@@ -89,6 +89,29 @@ row counts. `summarizeRLSCDocument(doc)` exposes the same counters as a JSON
 object when a UI wants to render its own summary. Use `JSON.stringify(doc,
 null, 2)` when a lossless machine-readable artifact is required.
 
+For a human review that also needs layout signals, opt in to the compact
+analysis section. It reports dominant flow, balance, grid/spacing signals,
+golden-ratio score, and bounded area-overflow diagnostics. The analysis is
+derived from the document and does not replace the lossless snapshot.
+
+```ts
+import { formatRLSCSnapshot, summarizeRLSCAnalysis } from 'rlsc-analysis';
+
+const review = formatRLSCSnapshot(result.doc, {
+  includeAnalysis: true,
+  maxIssues: 8,
+});
+console.log(review);
+
+const analysis = summarizeRLSCAnalysis(result.doc);
+// analysis.overflowIssueCount / analysis.maxOverflowPx
+// analysis.dominantFlow / analysis.spacingBase / analysis.gridPattern
+```
+
+`includeAnalysis` defaults to `false` so existing bounded output remains stable.
+Use `analyzeAreas(doc)` when the full metrics, pattern, node index, or complete
+issue records are required.
+
 Keep pure analysis imports separate from browser collection imports when building non-browser tooling.
 
 `scanScreen()` is the recommended browser-facing entrypoint when the caller wants a complete snapshot:

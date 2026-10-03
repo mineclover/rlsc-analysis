@@ -9,6 +9,7 @@ import {
   getFigmaCoverage,
   getGraphicsAdapterCoverage,
   getGraphicsAdapterCoverages,
+  summarizeRLSCAnalysis,
   toFigmaAutoLayoutFromGraphicsLayout,
   summarizeRLSCDocument,
 } from './index.js';
@@ -202,6 +203,56 @@ describe('snapshot readability helpers', () => {
     expect(formatRLSCSnapshot(doc, { includeAttributes: true })).toContain(
       'data-qa-address="checkout:submit"',
     );
+  });
+
+  it('exposes compact layout analysis without the full metrics object', () => {
+    const doc = documentWithRoot(
+      node({
+        id: 'parent',
+        tag: 'main',
+        rect: { x: 0, y: 0, width: 100, height: 100 },
+        children: [
+          node({
+            id: 'child',
+            tag: 'button',
+            rect: { x: 90, y: 10, width: 30, height: 20 },
+          }),
+        ],
+      }),
+    );
+
+    const analysis = summarizeRLSCAnalysis(doc);
+    expect(analysis.dominantFlow).toBe('free');
+    expect(analysis.gridPattern).toBe('1-col');
+    expect(analysis.overflowIssueCount).toBe(1);
+    expect(analysis.maxOverflowPx).toBe(20);
+    expect(analysis.textDensity).toBeUndefined();
+  });
+
+  it('appends bounded metrics and overflow diagnostics when requested', () => {
+    const doc = documentWithRoot(
+      node({
+        id: 'parent',
+        tag: 'main',
+        rect: { x: 0, y: 0, width: 100, height: 100 },
+        children: [
+          node({ id: 'child-a', rect: { x: 90, y: 10, width: 30, height: 20 } }),
+          node({ id: 'child-b', rect: { x: -12, y: 10, width: 20, height: 20 } }),
+        ],
+      }),
+    );
+
+    const output = formatRLSCSnapshot(doc, {
+      includeLayers: false,
+      includeRelations: false,
+      includeAnalysis: true,
+      maxIssues: 1,
+    });
+
+    expect(output).toContain('analysis:');
+    expect(output).toContain('flow=free');
+    expect(output).toContain('area overflow=2 issues');
+    expect(output).toContain('… 1 issue row omitted');
   });
 });
 
