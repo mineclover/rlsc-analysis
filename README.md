@@ -208,7 +208,7 @@ The index treats `node.id` as a runtime identifier and `ScreenIdentifier` fields
 
 ## Accuracy Smoke
 
-Use the browser accuracy smoke when changing collection, identifier, or perspective integration behavior.
+Use the browser accuracy smoke when changing collection, identifier, or perspective integration behavior. The command requires the sibling `rlsc-perspective` and `@qa-sdk/e2e` workspace packages; it fails closed when either package is absent.
 
 Inside this standalone repository, run:
 
@@ -234,3 +234,8 @@ Default thresholds:
 - min IoU: `>= 0.98`
 - max aspect-ratio error: `<= 0.01`
 - XPath match rate: `1.0`
+
+In the qa-sdk repository, `rlsc-perspective` is externalized to
+[pnpm-mcp](https://github.com/mineclover/pnpm-mcp/tree/main/packages/rlsc-perspective).
+Run the full accuracy smoke from that checkout. The qa-sdk-local checks are the
+`rlsc-analysis` unit/build checks and the `visbug-bridge` integration smoke.

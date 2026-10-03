@@ -23,7 +23,7 @@
     }
   },
   "scripts": {
-    "accuracy:browser": "corepack pnpm --dir ../.. --filter rlsc-analysis build && corepack pnpm --dir ../.. --filter rlsc-perspective build && corepack pnpm --dir ../.. --filter @qa-sdk/e2e exec node ../../packages/rlsc-analysis/smoke/accuracy.mjs",
+    "accuracy:browser": "corepack pnpm --dir ../.. --filter rlsc-analysis build && corepack pnpm --dir ../.. --fail-if-no-match --filter rlsc-perspective build && corepack pnpm --dir ../.. --fail-if-no-match --filter @qa-sdk/e2e exec node ../../packages/rlsc-analysis/smoke/accuracy.mjs",
     "build": "tsup",
     "dev": "tsup --watch",
     "prepare": "tsup",
